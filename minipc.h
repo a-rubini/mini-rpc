@@ -15,6 +15,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+/* Hard limit */
+#define MINIPC_MAX_NAME		16 /* includes trailing 0 */
+#define MINIPC_MAX_CLIENTS	8
+
 /* Argument type (and retval type). The size is encoded in the same word */
 enum minipc_at {
 	MINIPC_AT_INT = 1,
@@ -29,7 +33,6 @@ enum minipc_at {
 #define MINIPC_ARG_ENCODE(at, type) __MINIPC_ARG_ENCODE(at, sizeof(type))
 #define MINIPC_GET_AT(word) ((word) >> 16)
 #define MINIPC_GET_ASIZE(word) ((word) & 0xffff)
-
 
 /* The exported procedure looks like this */
 struct minipc_pd;
@@ -53,9 +56,9 @@ struct minipc_ch {
 static inline int minipc_fileno(struct minipc_ch *ch) {return ch->fd;}
 
 /* These return NULL with errno on erro */
-struct minipc_ch *minipc_server_create(const char *name);
-struct minipc_ch *minipc_client_create(const char *name);
-struct minipc_ch *minipc_close(struct minipc_ch *);
+struct minipc_ch *minipc_server_create(const char *name, int flags);
+struct minipc_ch *minipc_client_create(const char *name, int flags);
+int minipc_close(struct minipc_ch *ch);
 
 /* Generic: attach diagnostics to a log file */
 int minipc_set_logfile(struct minipc_ch *ch, FILE *logf);
@@ -67,7 +70,10 @@ int minipc_unexport(struct minipc_ch *ch, const char *name,
 		    const struct minipc_pd *pd);
 
 /* Handle a request if pending, otherwise -1 and EAGAIN */
-int minipc_server_action(struct minipc_ch *ch);
+int minipc_server_action(struct minipc_ch *ch, int timeoutms);
+
+/* Return an fdset for the user to select() on the service */
+int minipc_server_get_fdset(struct minipc_ch *ch, fd_set *setptr);
 
 /* Client: make requests */
 int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,

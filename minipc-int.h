@@ -25,30 +25,57 @@
 	const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
 	(type *)( (char *)__mptr - offsetof(type,member) );})
 
-#define offsetof(TYPE,MEMBER) __compiler_offsetof(TYPE,MEMBER)
+#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 /*
  * While public symbols are minipc_* internal ones are mpc_* to be shorter.
  * The connection includes an fd, which is the only thing returned back
  */
+
+/* The list of functions attached to a service */
 struct mpc_flist {
-	struct minipc_pd *pd;
-	char *name;
+	const struct minipc_pd *pd;
+	const char *name;
 	struct mpc_flist *next;
 };
 
+/*
+ * The main server or client structure. Server links have client sockets
+ * hooking on it.
+ */
 struct mpc_link {
 	struct minipc_ch ch;
+	int magic;
 	int flags;
-	struct mpc_flist *list;
-	FILE *logfile;
+	struct mpc_link *nextl;
+	struct mpc_flist *flist;
+	FILE *logf;
 	struct sockaddr_un addr;
-	char name[16];
+	char name[MINIPC_MAX_NAME];
+	int fd[MINIPC_MAX_CLIENTS];
+	fd_set fdset;
 };
-#define MINIPC_FLAG_SERVER		0x10000
-#define MINIPC_FLAG_CLIENT		0x20000
+#define MPC_MAGIC		0xc0ffee99
+
+#define MPC_FLAG_SERVER		0x00010000
+#define MPC_FLAG_CLIENT		0x00020000
+#define MPC_USER_FLAGS(x)	((x) & 0xffff)
+
+#define MPC_TIMEOUT		1000 /* msec, hardwired */
+
+static inline struct mpc_link *mpc_get_link(struct minipc_ch *ch)
+{
+	return container_of(ch, struct mpc_link, ch);
+}
+
+#define CHECK_LINK(link) /* Horrible shortcut, don't tell around... */	\
+		if ((link)->magic != MPC_MAGIC) {			\
+		errno = -EINVAL;					\
+		return -1;						\
+	}
 
 extern struct mpc_link *__mpc_base;
+extern void mpc_free_flist(struct mpc_link *link, struct mpc_flist *flist);
 
 #endif /* __MINIPC_INT_H__ */
