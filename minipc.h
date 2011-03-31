@@ -18,9 +18,11 @@
 /* Hard limit */
 #define MINIPC_MAX_NAME		16 /* includes trailing 0 */
 #define MINIPC_MAX_CLIENTS	8
+#define MINIPC_MAX_ARGUMENTS	32
 
 /* Argument type (and retval type). The size is encoded in the same word */
 enum minipc_at {
+	MINIPC_AT_ERROR = 0xffff,
 	MINIPC_AT_INT = 1,
 	MINIPC_AT_INT64,
 	MINIPC_AT_FLOAT,
@@ -36,7 +38,8 @@ enum minipc_at {
 
 /* The exported procedure looks like this */
 struct minipc_pd;
-typedef int (minipc_f)(struct minipc_pd *, uint32_t *args, uint32_t *ret);
+typedef int (minipc_f)(const struct minipc_pd *,
+		       uint32_t *args, uint32_t *ret);
 
 /* This is the "procedure definition" */
 struct minipc_pd {
@@ -44,9 +47,9 @@ struct minipc_pd {
 	uint32_t  id;		/* function id, usually a 4-byte ascii */
 	uint32_t flags;
 	uint32_t retval;	/* type of return value */
-	uint32_t args[0];	/* the list of arguments, null-terminated */
+	uint32_t args[];	/* the list of arguments, null-terminated */
 };
-/* Flags */
+/* Flags: verbosity is about argument and retval marshall/unmarshall */
 #define MINIPC_FLAG_VERBOSE		1
 
 /* This is the channel definition */

@@ -15,12 +15,16 @@ LDFLAGS = -L. -lminipc
 OBJ = minipc-core.o minipc-server.o minipc-client.o
 
 LIB = libminipc.a
-PROGS = sample-server sample-client
+PROGS_O = sample-server.o sample-client.o
 
-all: $(LIB) $(PROGS)
+all: $(LIB) $(PROGS_O) $(PROGS)
 
 $(LIB): $(OBJ)
 	$(AR) r $@ $^
+
+# the default puts LDFLAGS too early. Bah...
+%: %.c
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
 # This is stupid, it won't apply the first time, but, well... it works
 $(wildcard *.o): $(wildcard *.h)

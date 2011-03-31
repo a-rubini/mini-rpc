@@ -27,10 +27,21 @@ int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
 	struct mpc_link *link = mpc_get_link(ch);
 	struct pollfd pfd;
 	int i, retsize;
+	static uint32_t newargs[MINIPC_MAX_ARGUMENTS];
 
 	CHECK_LINK(link);
 
-	/* FIXME: Build a packet and send it out */
+	/* Build the packet to send out */
+	newargs[0] = pd->id;
+	newargs[1] = pd->retval;
+	for (i = 0; i < (MINIPC_MAX_ARGUMENTS - 3); i++) {
+		newargs[i+2] = args[i];
+		if (!args[i])
+			break;
+	}
+	/* It has been copied up to i included */
+	if (send(ch->fd, newargs, sizeof(newargs[0]) * (i + 2), 0) < 0)
+		return -1;
 
 	/* Get the reply packet and return its lenght */
 	pfd.fd = ch->fd;
