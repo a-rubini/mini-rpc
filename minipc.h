@@ -38,13 +38,15 @@ enum minipc_at {
 
 /* The exported procedure looks like this */
 struct minipc_pd;
-typedef int (minipc_f)(const struct minipc_pd *,
-		       uint32_t *args, uint32_t *ret);
+typedef int (minipc_f)(const struct minipc_pd *, void *retval, void *args);
 
 /* This is the "procedure definition" */
 struct minipc_pd {
 	minipc_f *f;		/* pointer to the function */
-	uint32_t  id;		/* function id, usually a 4-byte ascii */
+	union id {
+		uint32_t  i;	/* integer description, used in lookup */
+		char s[8];	/* string description, only 4 bytes used */
+	}
 	uint32_t flags;
 	uint32_t retval;	/* type of return value */
 	uint32_t args[];	/* the list of arguments, null-terminated */
@@ -80,6 +82,6 @@ int minipc_server_get_fdset(struct minipc_ch *ch, fd_set *setptr);
 
 /* Client: make requests */
 int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
-		uint32_t *args, uint32_t *ret);
+		uint32_t *ret, void *args);
 
 #endif /* __MINIPC_H__ */
