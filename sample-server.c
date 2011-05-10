@@ -8,6 +8,8 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 #include <sys/time.h>
 
 #include "minipc.h"
@@ -20,45 +22,44 @@ static int ss_do_sum(int a, int b)
 
 /* These are the ones called from outside */
 static int ss_sum_function(const struct minipc_pd *pd,
-		       uint32_t *args, uint32_t *ret)
+		       uint32_t *args, void *ret)
 {
-	int a, b, c;
+	int c;
 
 	/* unmarshall the arguments, call, marshall back */
-	minipc_unmarshall_args(pd, args, &a, &b, NULL);
-	c = ss_do_sum(a, b);
-	return minipc_marshall_ret(pd, ret, &c, NULL);
+	c = ss_do_sum(args[0], args[1]);
+	*(int *)ret = c;
+	return 0;
 }
 
 static int ss_tod_function(const struct minipc_pd *pd,
-		       uint32_t *args, uint32_t *ret)
+		       uint32_t *args, void *ret)
 {
 	struct timeval tv;
-	int i;
 
-	minipc_unmarshall_args(pd, args, NULL);
-	i = gettimeofday(&tv, NULL);
-	return minipc_marshall_ret(pd, ret, &tv, NULL);
+	gettimeofday(&tv, NULL);
+	*(struct timeval *)ret = tv;
+	return 0;
 }
 
 /* Describe the two functions above */
 const struct minipc_pd ss_sum_struct = {
 	.f = ss_sum_function,
-	.id = 0x73756d00, /* "sum\0" */
-	.retval = MINIPC_ARG_ENCODE(MINIPC_AT_INT, int),
+	.name = "sum",
+	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
 	.args = {
-		MINIPC_ARG_ENCODE(MINIPC_AT_INT, int),
-		MINIPC_ARG_ENCODE(MINIPC_AT_INT, int),
-		0
+		MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
+		MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
+		MINIPC_ARG_END,
 	},
 };
 
 const struct minipc_pd ss_tod_struct = {
 	.f = ss_tod_function,
-	.id = 0x746f6400, /* "tod\0" */
-	.retval = MINIPC_ARG_ENCODE(MINIPC_AT_STRUCT, struct timeval),
+	.name = "gettimeofday",
+	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_STRUCT, struct timeval),
 	.args = {
-		0
+		MINIPC_ARG_END,
 	},
 };
 
@@ -67,13 +68,20 @@ int main(int argc, char **argv)
 	struct minipc_ch *server;
 
 	server = minipc_server_create("sample", 0);
-	if (!server)
+	if (!server) {
+		fprintf(stderr, "%s: server_create(): %s\n", argv[0],
+			strerror(errno));
 		exit(1);
+	}
 	minipc_set_logfile(server, stderr);
-	minipc_export(server, "sum", &ss_sum_struct);
-	minipc_export(server, "gettimeofday", &ss_tod_struct);
+	minipc_export(server, &ss_sum_struct);
+	minipc_export(server, &ss_tod_struct);
 	while (1) {
-		minipc_server_action(server, 1000);
+		if (minipc_server_action(server, 1000) < 0) {
+			fprintf(stderr, "%s: server_action(): %s\n", argv[0],
+				strerror(errno));
+			exit(1);
+		}
 		fprintf(stdout, "%s: looping...\n", __func__);
 	}
 }

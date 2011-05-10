@@ -12,35 +12,55 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <stdarg.h>
 #include <poll.h>
 #include <errno.h>
+#include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/un.h>
 
 #include "minipc-int.h"
 
-struct minipc_ch *minipc_client_create(const char *name, int flags);
+struct minipc_ch *minipc_client_create(const char *name, int f)
+{
+	return __minipc_link_create(name, MPC_USER_FLAGS(f) | MPC_FLAG_CLIENT);
+}
 
 int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
-		uint32_t *ret, void *args)
+		void *ret, ...)
 {
 	struct mpc_link *link = mpc_get_link(ch);
 	struct pollfd pfd;
-	int i, retsize;
-	static uint32_t newargs[MINIPC_MAX_ARGUMENTS];
+	int i, narg, size, retsize;
+	va_list ap;
+	struct mpc_req_packet pkt_out = {"",};
+	struct mpc_rep_packet pkt_in;
 
 	CHECK_LINK(link);
 
-	/* Build the packet to send out */
-	newargs[0] = pd->id.i;
-	newargs[1] = pd->retval;
-	for (i = 0; i < (MINIPC_MAX_ARGUMENTS - 3); i++) {
-		newargs[i+2] = args[i];
-		if (!args[i])
+	/* Build the packet to send out -- marshall args */
+	strcpy(pkt_out.name, pd->name);
+	va_start(ap, ret);
+	for (i = narg = 0; ; i++) {
+		if (narg >= MINIPC_MAX_ARGUMENTS) /* unlikely */
 			break;
+
+		switch (MINIPC_GET_ATYPE(pd->args[i])) {
+		case MINIPC_ATYPE_NONE:
+			goto out; /* end of list */
+		case MINIPC_ATYPE_INT:
+			pkt_out.args[narg++] = va_arg(ap, int);
+			break;
+		default:
+			/* FIXME: other args unsupperted */
+			break;
+		}
 	}
-	/* It has been copied up to i included */
-	if (send(ch->fd, newargs, sizeof(newargs[0]) * (i + 2), 0) < 0)
+ out:
+	va_end(ap);
+
+	size = sizeof(pkt_out.name) + sizeof(pkt_out.args[0]) * narg;
+	if (send(ch->fd, &pkt_out, size, 0) < 0)
 		return -1;
 
 	/* Get the reply packet and return its lenght */
@@ -51,6 +71,19 @@ int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
 		errno = ETIMEDOUT;
 		return -1;
 	}
-	retsize = MINIPC_GET_ASIZE(pd->retval);
-	return recv(ch->fd, ret, retsize, 0);
+	size = MINIPC_GET_ASIZE(pd->retval) + sizeof(uint32_t);
+	retsize = recv(ch->fd, &pkt_in, size, 0);
+	if (retsize != size) { /* FIXME: differentiate -1 from short reply */
+		*(int *)ret = errno;
+		errno = EREMOTEIO;
+		return -1;
+	}
+	/* another check: the return type must match */
+	if (pkt_in.type != pd->retval) {
+		*(int *)ret = EINVAL;
+		errno = EREMOTEIO;
+		return -1;
+	}
+	memcpy(ret, &pkt_in.val, MINIPC_GET_ASIZE(pd->retval));
+	return 0; /* FIXME: return size must be checked */
 }

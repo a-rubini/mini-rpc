@@ -24,50 +24,15 @@
  * This function creates a server structure and links it to the
  * process-wide list of links
  */
-struct minipc_ch *minipc_server_create(const char *name, int flags)
+struct minipc_ch *minipc_server_create(const char *name, int f)
 {
-	struct mpc_link *link, *next;
-	struct sockaddr_un sun;
-	int fd, i;
-
-	link = calloc(1, sizeof(*link));
-	if (!link) return NULL;
-	link->magic = MPC_MAGIC;
-	link->flags = flags;
-	strncpy(link->name, name, MINIPC_MAX_NAME);
-	link->name[MINIPC_MAX_NAME-1] = '\0';
-
-	for (i = 0; i < MINIPC_MAX_CLIENTS; i++)
-		link->fd[i] = -1;
-
-	/* now create the socket and prepare the service */
-	fd = socket(SOCK_STREAM, AF_UNIX, 0);
-	if(fd < 0)
-		goto out_free;
-	sun.sun_family = AF_UNIX;
-	strcpy(sun.sun_path, "/tmp/.minipc-");
-	strcat(sun.sun_path, link->name);
-	unlink(sun.sun_path);
-	if (bind (fd, (struct sockaddr *)&sun, sizeof(sun)) < 0)
-		goto out_free;
-	if (listen(fd, 5) < 0)
-		goto out_free;
-
-	/* success: link to the list and return */
-	next = __mpc_base;
-	link->nextl = __mpc_base;
-	__mpc_base = link;
-	return &link->ch;
- out_free:
-	free(link);
-	return NULL;
+	return __minipc_link_create(name, MPC_USER_FLAGS(f) | MPC_FLAG_SERVER);
 }
 
 /*
  * The following ones add to the export list and remove from it
  */
-int minipc_export(struct minipc_ch *ch, const char *name,
-		  const struct minipc_pd *pd)
+int minipc_export(struct minipc_ch *ch, const struct minipc_pd *pd)
 {
 	struct mpc_link *link = mpc_get_link(ch);
 	struct mpc_flist *flist;
@@ -77,19 +42,17 @@ int minipc_export(struct minipc_ch *ch, const char *name,
 	flist = calloc(1, sizeof(*flist));
 	if (!flist)
 		return -1;
-	flist->name = name;
 	flist->pd = pd;
 	flist->next = link->flist;
 	link->flist = flist;
 	if (link->logf)
 		fprintf(link->logf, "%s: exported %p (%s) with pd %p --"
-			"id %08x, retval %08x, args %08x...\n", __func__,
-			flist, name, pd, pd->id.i, pd->retval, pd->args[0]);
+			" retval %08x, args %08x...\n", __func__,
+			flist, pd->name, pd, pd->retval, pd->args[0]);
 	return 0;
 }
 
-int minipc_unexport(struct minipc_ch *ch, const char *name,
-		    const struct minipc_pd *pd)
+int minipc_unexport(struct minipc_ch *ch, const struct minipc_pd *pd)
 {
 	struct mpc_link *link = mpc_get_link(ch);
 	struct mpc_flist *flist;
@@ -127,13 +90,13 @@ int minipc_server_get_fdset(struct minipc_ch *ch, fd_set *setptr)
  */
 static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 {
-	static uint32_t args[MINIPC_MAX_ARGUMENTS];
-	static uint32_t ret[MINIPC_MAX_ARGUMENTS];
+	struct mpc_req_packet pkt_in;
+	struct mpc_rep_packet pkt_out;
 	const struct minipc_pd *pd;
 	struct mpc_flist *flist;
 	int i;
 
-	i = recv(fd, args, sizeof(args), 0);
+	i = recv(fd, &pkt_in, sizeof(pkt_in), 0);
 	if (i < 0 && errno == EINTR)
 		 return;
 	if (i <= 0) {
@@ -141,34 +104,37 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 			fprintf(link->logf, "%s: error %i in fd %i, closing\n",
 				__func__, i < 0 ? errno : 0, fd);
 		close(fd);
+		FD_CLR(fd, &link->fdset);
 		link->fd[pos] = -1;
 		return;
 	}
-	/* Write last-arg as 0, to be safer (but not safe) */
-	i /= sizeof(args[0]);
-	if (i >= 0) args[i-1] = 0;
 
-	/* Arg[0] is the id of the function */
+	/* use pkt_in.name to look for the function */
 	for (flist = link->flist; flist; flist = flist->next)
-		if (flist->pd->id.i == args[0])
+		if (!(strcmp(pkt_in.name, flist->pd->name)))
 			break;
 	if (!flist) {
 		if (link->logf)
-			fprintf(link->logf, "%s: id %08x not found\n",
-				__func__, args[0]);
+			fprintf(link->logf, "%s: function %s not found\n",
+				__func__, pkt_in.name);
 		return;
 	}
 	pd = flist->pd;
 	if (link->logf)
-		fprintf(link->logf, "%s: request for %08x (%s)\n",
-			__func__, args[0], flist->name);
-	/* Call the function, return value */
-	i = pd->f(pd, args, ret);
+		fprintf(link->logf, "%s: request for %s\n",
+			__func__, pd->name);
+
+	/* call the function and send back stuff */
+	pkt_out.type = pd->retval;
+	i = pd->f(pd, pkt_in.args, &pkt_out.val);
 	if (i < 0) {
-		ret[0] = __MINIPC_ARG_ENCODE(MINIPC_AT_ERROR, ret[0]);
-		i = 1; /* number of words to send back */
+		pkt_out.type = MINIPC_ARG_ENCODE(MINIPC_ATYPE_ERROR, int);
+		*(int *)(&pkt_out.val) = errno;
+	} else {
+		pkt_out.type = pd->retval;
 	}
-	send(fd, ret, i * sizeof(ret[0]), 0);
+	send(fd, &pkt_out, sizeof(pkt_out.type)
+	     + MINIPC_GET_ASIZE(pkt_out.type), 0);
 }
 
 static void mpc_handle_server(struct mpc_link *link, int fd)
@@ -236,7 +202,7 @@ int minipc_server_action(struct minipc_ch *ch, int timeoutms)
 		mpc_handle_client(link, i, link->fd[i]);
 	}
 	/* Finally, look for a new client */
-	if (!FD_ISSET(ch->fd, &set))
+	if (FD_ISSET(ch->fd, &set))
 		mpc_handle_server(link, ch->fd);
 	return 0;
 }

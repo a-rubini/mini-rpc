@@ -8,6 +8,8 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 #include <sys/time.h>
 
 #include "minipc.h"
@@ -15,58 +17,61 @@
 
 /* The description here is the same as in the server */
 const struct minipc_pd ss_sum_struct = {
-	.id = 0x73756d00, /* "sum\0" */
-	.retval = MINIPC_ARG_ENCODE(MINIPC_AT_INT, int),
+	.name = "sum",
+	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
 	.args = {
-		MINIPC_ARG_ENCODE(MINIPC_AT_INT, int),
-		MINIPC_ARG_ENCODE(MINIPC_AT_INT, int),
-		0
+		MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
+		MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
+		MINIPC_ARG_END,
 	},
 };
 
 const struct minipc_pd ss_tod_struct = {
-	.id = 0x746f6400, /* "tod\0" */
-	.retval = MINIPC_ARG_ENCODE(MINIPC_AT_STRUCT, struct timeval),
+	.name = "gettimeofday",
+	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_STRUCT, struct timeval),
 	.args = {
-		0
+		MINIPC_ARG_END,
 	},
 };
 
 int main(int argc, char **argv)
 {
-	struct minipc_ch *server;
-	uint32_t args[16];
-	uint32_t ret[4];
-	int a, b, c;
+	struct minipc_ch *client;
+	int a, b, c, ret;
 	struct timeval tv;
 
-	server = minipc_client_create("sample", 0);
-	if (!server)
+	client = minipc_client_create("sample", 0);
+	if (!client) {
+		fprintf(stderr, "%s: client_create(): %s\n", argv[0],
+			strerror(errno));
 		exit(1);
-	minipc_set_logfile(server, stderr);
+	}
+	minipc_set_logfile(client, stderr);
 
 	/* gettod, sum, sum, gettod */
-	minipc_marshall_args(&ss_tod_struct, args, NULL);
-	minipc_call(server, &ss_tod_struct, args, ret);
-	minipc_unmarshall_ret(&ss_tod_struct, ret, &tv, NULL);
-
+	ret = minipc_call(client, &ss_tod_struct, &tv, NULL);
+	if (ret < 0) {
+		goto error;
+	}
+	printf("tv: %li.%06li\n", tv.tv_sec, tv.tv_usec);
 
 	a = 345; b = 628;
-	minipc_marshall_args(&ss_sum_struct, args, &a, &b, NULL);
-	minipc_call(server, &ss_sum_struct, args, ret);
-	minipc_unmarshall_ret(&ss_sum_struct, ret, &c, NULL);
+	ret = minipc_call(client, &ss_sum_struct, &c, a, b);
+	if (ret < 0) {
+		goto error;
+	}
 	printf("%i + %i = %i\n", a, b, c);
 
 	a = 10; b = 20;
-	minipc_marshall_args(&ss_sum_struct, args, &a, &b, NULL);
-	minipc_call(server, &ss_sum_struct, args, ret);
-	minipc_unmarshall_ret(&ss_sum_struct, ret, &c, NULL);
+	ret = minipc_call(client, &ss_sum_struct, &c, a, b);
+	if (ret < 0) {
+		goto error;
+	}
 	printf("%i + %i = %i\n", a, b, c);
 
-	minipc_export(server, "sum", &ss_sum_struct);
-	minipc_export(server, "gettimeofday", &ss_tod_struct);
-	while (1) {
-		minipc_server_action(server, 1000);
-		fprintf(stdout, "%s: looping...\n", __func__);
-	}
+	return 0;
+
+ error:
+	fprintf(stderr, "Error in rpc: %s\n", strerror(errno));
+	exit(1);
 }

@@ -36,7 +36,6 @@
 /* The list of functions attached to a service */
 struct mpc_flist {
 	const struct minipc_pd *pd;
-	const char *name;
 	struct mpc_flist *next;
 };
 
@@ -62,6 +61,17 @@ struct mpc_link {
 #define MPC_FLAG_CLIENT		0x00020000
 #define MPC_USER_FLAGS(x)	((x) & 0xffff)
 
+/* The request packet being transferred */
+struct mpc_req_packet {
+	char name[MINIPC_MAX_NAME];
+	uint32_t args[MINIPC_MAX_ARGUMENTS];
+};
+/* The reply packet being transferred */
+struct mpc_rep_packet {
+	uint32_t type;
+	uint8_t val[MINIPC_MAX_REPLY];
+};
+
 #define MPC_TIMEOUT		1000 /* msec, hardwired */
 
 static inline struct mpc_link *mpc_get_link(struct minipc_ch *ch)
@@ -77,5 +87,7 @@ static inline struct mpc_link *mpc_get_link(struct minipc_ch *ch)
 
 extern struct mpc_link *__mpc_base;
 extern void mpc_free_flist(struct mpc_link *link, struct mpc_flist *flist);
+
+extern struct minipc_ch *__minipc_link_create(const char *name, int flags);
 
 #endif /* __MINIPC_INT_H__ */

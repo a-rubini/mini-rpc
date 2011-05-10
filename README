@@ -4,8 +4,8 @@ This is a mini remote procedure call, but I called it IPC in error.
 It currently being suggested as a replacement for what we have in the
 white rabbit system, because the way it is there is not portable
 (assembly code and knowledge of the ABI is required for each
-platform).  Nonetheless, I borrow quite some idea from the
-implementation by Tomek (Tomasz Wlostowski), who must definitely be
+platform).  Nonetheless, I borrowed quite some idea from the
+implementation by Tomasz Wlostowski, who must definitely be
 considered co-author and my inspiring muse.
 
 	Basic Ideas
@@ -36,7 +36,7 @@ not) export the thing over TCP and add endian conversion, but at this
 point the data type is really just informative.
 
 An argument list is a zero-terminated array of 32-bit integers, which
-specify both the type and the size of the argument being passed.
+specifies both the type and the size of the argument being passed.
 The return value is a single 32-bit integer specifying type and size.
 The header provides macros to build the actual values.
 
@@ -44,30 +44,28 @@ The header provides macros to build the actual values.
 	-------------------
 
 Client and server must agree on the functions being called remotely.
-A function is identified by either an integer ID or a string ID; I
-suggest you assign the string id (a 4-byte string, but the space
-allocated is 8 byte so you can us a zero-terminated string with 4
-meaningful bytes.
+A function is identified by a string name, 18 bytes at most.
 
-This is the "procedure definition" structure:
+This is the "procedure definition" structure, 32 bytes plus the argument
+list:
 
 struct minipc_pd {
         minipc_f *f;            /* pointer to the function */
-        union id {
-                uint32_t  i;    /* integer description, used in lookup */
-                char s[8];      /* string description, only 4 bytes used */
-        }
+        char name[20];          /* name of the function */
         uint32_t flags;
         uint32_t retval;        /* type of return value */
         uint32_t args[];        /* the list of arguments, null-terminated */
 };
 
-
 Client and server are expected to share a data structure, or at least
-the macros used to build the data structure, as ID, arg list and
-retval should match.  The server will then fill the function
-pointer. The only flag here is "MINIPC_FLAG_VERBOSE", used to get
-diagnostic messages on the marshall and unmarshall operations.
+the macros used to build the data structure. Name, arg list and retval
+should match.  The server will then fill the function pointer. No
+user-accessible flag is currently in use.
+
+the "args" array must be terminated by a "MINIPC_ARG_END" value, which
+is guaranteed to be bitwise zero. The other arguments encode type and
+size, even if some types (like integers, floats) always have the same
+size. See the ATYPE macros in "minipc.h"
 
 
         The client
@@ -79,24 +77,30 @@ simply hosts a file descriptor, so you have these functions:
   struct minipc_ch *minipc_client_create(const char *name, int flags);
   int minipc_fileno(struct minipc_ch *ch);
 
+The name argument is a filename used for the Unix domain socket, it
+must include no path separators, as the socket is created in the
+directory MINIPC_BASE_PATH, (default "/tmp/.minipc").  When TCP is
+added, it will use names of the form ":TCP:3456".
+
 With the fileno a client may poll for writing, although it is not
 usually needed (the server will only send reply packets, one reply
-for each request.
+for each request).
 
 A client can make a request like this:
 
   int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
-                void *ret, void *args);
+                void *ret, ...);
 
-The arguments must be filled and the return value is set on return.
-Arguments are passed as a zero-terminated array of generic pointers.
-The minipc_call will pick data from each pointer according to the
-argument types set forth in the "pd" procedure definition. Similarly,
-the return value is stored where pointed by ret, according to pd->retval.
-The "minipc_call" returns 0 on success and -1 with errno on failure.
-Remote failures are reported as EREMOTEIO, storing an integer number
-on the retval pointer (please ensure retval does not point to an
-individual byte).
+The arguments are passed as a list of values (stuctures and strings
+are passed by pointer); the return pointer is filled with the returned
+data item.  The minipc_call function picks data from the variable arguments
+according to the argument types set forth in the "pd" procedure
+definition. Similarly, the return value is stored where pointed by
+ret, according to pd->retval.  Note that the return value must at least
+be 4 bytes long.  The "minipc_call" returns 0 on success
+and -1 with errno on failure.  Remote failures are reported as
+EREMOTEIO, storing an integer number using the retval pointer (all return
+values are at least int-sized already).
 
 To close the connection, a client can call
 
@@ -106,18 +110,17 @@ To close the connection, a client can call
         Diagnostics
         -----------
 
-Besides the "MINIPC_FLAG_VERBOSE" associated with as single function,
-a "minipc_ch" channel can have an associated log file (you may
+A "minipc_ch" channel can have an associated log file (you may
 use stderr or whatever). This function sets the log file:
 
   int minipc_set_logfile(struct minipc_ch *ch, FILE *logf);
 
 You can set the logfile to NULL (default at channel creation) if you
 want to stop sending diagnostics. The function does not open or
-close the file, as it wouldn't work with stderr, so if you want
+close the file, as otherwise it wouldn't work with stderr, so if you want
 to open a log file on disk, it's your duty to do so (and possibly
-set it as unbuffered, since the library only calls fprintf on it).
-
+set it as unbuffered, since the library only calls fprintf on it,
+with no explicit fflush).
 
         The server
         ----------
@@ -127,19 +130,19 @@ The following functions are available for the server:
 
   struct minipc_ch *minipc_server_create(const char *name, int flags);
 
-  int minipc_export(struct minipc_ch *ch, const char *name,
-                  const struct minipc_pd *pd);
-  int minipc_unexport(struct minipc_ch *ch, const char *name,
-                    const struct minipc_pd *pd);
+  int minipc_export(struct minipc_ch *ch, const struct minipc_pd *pd);
+  int minipc_unexport(struct minipc_ch *ch, const struct minipc_pd *pd);
 
   int minipc_server_action(struct minipc_ch *ch, int timeoutms);
 
   int minipc_server_get_fdset(struct minipc_ch *ch, fd_set *setptr);
 
 
-The export and unexport functions should be self-explicative. The name
-is only used for diagnostics, if the connection has an associated log
-file (you should pass meaningful names in any case).
+The export and unexport functions should be self-explicative. Note
+that the exported funcion name is part of the pd structure. The "pd"
+passed to "minipc_unexport" must be the same as the one passed to
+"minipc_export", not just a pointer to a data structure with the same
+contents.
 
 The server action either accepts a new client or handles all pending
 client requests. For every packet received from a client, a reply
@@ -163,16 +166,16 @@ usually pointing to the packet buffer, so you should not change
 the arguments themselves before calling the real function with the
 ABI of the current CPU.
 
-For example, exporting sqrt will look like the following
+For example, exporting sqrt would look like the following
 
   extern double sqrt(double x);
 
-  int export_sqrt(const struct minipc_pd *pd, void *retval, void *args)
+  int export_sqrt(const struct minipc_pd *pd, uint32_t *args, void *ret)
   {
         double in, out;
 
         in = *(double *)args[0];
-        out = sqrt(input);
+        out = sqrt(in);
         *(double *)retval = out;
 	return 0;
    }
@@ -181,16 +184,56 @@ For example, exporting sqrt will look like the following
          .f = export_sqrt,
          .id.s = "sqrt",
          .retval = MINIPC_ARG_ENCODE(MINIPC_AT_DOUBLE, double),
-         .args = { MINIPC_ARG_ENCODE(MINIPC_AT_DOUBLE, double), NULL},
+         .args = {
+                 MINIPC_ARG_ENCODE(MINIPC_AT_DOUBLE, double),
+                 MINIPC_ARG_END,
+        },
    }
 
-The client calling this service will work like this:
+The client calling this service will call the RPC in this way,
+assuming "struct minipc_ch *client" and "struct minipc_pd pd_sqrt"
+are valid variables:
 
-   int call_sqrt(const struct minipc_ch *ch,const struct minipc_pd *pd,
-	 double *out, double in)
-   {
-	  void *args[2] = {&in, NULL};
+   double operand;
+   double result;
+   int error;
 
-	  return minipc_call(ch, pd, out, args);
-   }
+   error = minipc_call(client, &pd_sqrt, &result, operand);
+   if (error < 0) { ... }
 
+
+
+        Communication protocol
+        ----------------------
+
+The protocol is an internal detail, but worth knowing in case a bug is
+discovered. Relevan structures are in the internal header
+"minipc-int.h".
+
+Request packets are "struct mpc_req_packet", thus build:
+
+	20 bytes for function name, copied from "pd" structure
+	an array of 32-bit integers
+
+Each argument passed to the remote function is stored into one or
+more such 32-bit integers, in host byte order. Note that the
+actual size of the argument is written in the "pd" args list.
+Marshalling is preformed by minipc_call() with varargs evaluation.
+
+Reply packets are "struct mpc_rep_packet", which has two fields:
+
+	uint32_t type
+	uing8_t val[]
+
+The type is checked to be the same as what is defined as "ret"
+in the "pd" structure. The val array is a plain byte array that
+is copied to the "ret" pointer passed to minipc_call (like "result"
+in the sqrt example above).
+
+
+	An example
+	----------
+
+./sample-server and ./sample-client are working examples.
+Note that a process can act as one or more server and one or more
+clients at the same time.

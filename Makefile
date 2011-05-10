@@ -9,15 +9,15 @@ STRIP           = $(CROSS_COMPILE)strip
 OBJCOPY         = $(CROSS_COMPILE)objcopy
 OBJDUMP         = $(CROSS_COMPILE)objdump
 
-CFLAGS = -Wall -ggdb -O2
+CFLAGS = -Wall -ggdb #-O2
 LDFLAGS = -L. -lminipc
 
 OBJ = minipc-core.o minipc-server.o minipc-client.o
 
 LIB = libminipc.a
-PROGS_O = sample-server.o sample-client.o
+PROGS = sample-server sample-client
 
-all: $(LIB) $(PROGS_O) $(PROGS)
+all: $(LIB) $(PROGS)
 
 $(LIB): $(OBJ)
 	$(AR) r $@ $^

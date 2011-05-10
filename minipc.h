@@ -15,41 +15,44 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* Hard limit */
-#define MINIPC_MAX_NAME		16 /* includes trailing 0 */
+/* Hard limits */
+#define MINIPC_MAX_NAME		20 /* includes trailing 0 */
 #define MINIPC_MAX_CLIENTS	8
 #define MINIPC_MAX_ARGUMENTS	32
+#define MINIPC_MAX_REPLY	60 /* bytes */
+
+/* The base pathname, mkdir is performed as needed */
+#define MINIPC_BASE_PATH "/tmp/.minipc"
 
 /* Argument type (and retval type). The size is encoded in the same word */
 enum minipc_at {
-	MINIPC_AT_ERROR = 0xffff,
-	MINIPC_AT_INT = 1,
-	MINIPC_AT_INT64,
-	MINIPC_AT_FLOAT,
-	MINIPC_AT_DOUBLE,
-	MINIPC_AT_STRING,
-	MINIPC_AT_STRUCT
+	MINIPC_ATYPE_ERROR = 0xffff,
+	MINIPC_ATYPE_NONE = 0,		/* used as terminator */
+	MINIPC_ATYPE_INT = 1,
+	MINIPC_ATYPE_INT64,
+	MINIPC_ATYPE_FLOAT,
+	MINIPC_ATYPE_DOUBLE,
+	MINIPC_ATYPE_STRING,
+	MINIPC_ATYPE_STRUCT
 };
 /* Encoding of argument type and size in one word */
-#define __MINIPC_ARG_ENCODE(at, asize) (((at) << 16) | (asize))
-#define MINIPC_ARG_ENCODE(at, type) __MINIPC_ARG_ENCODE(at, sizeof(type))
-#define MINIPC_GET_AT(word) ((word) >> 16)
+#define __MINIPC_ARG_ENCODE(atype, asize) (((atype) << 16) | (asize))
+#define MINIPC_ARG_ENCODE(atype, type) __MINIPC_ARG_ENCODE(atype, sizeof(type))
+#define MINIPC_GET_ATYPE(word) ((word) >> 16)
 #define MINIPC_GET_ASIZE(word) ((word) & 0xffff)
+#define MINIPC_ARG_END __MINIPC_ARG_ENCODE(MINIPC_ATYPE_NONE, 0) /* zero */
 
 /* The exported procedure looks like this */
 struct minipc_pd;
-typedef int (minipc_f)(const struct minipc_pd *, void *retval, void *args);
+typedef int (minipc_f)(const struct minipc_pd *, uint32_t *args, void *retval);
 
 /* This is the "procedure definition" */
 struct minipc_pd {
-	minipc_f *f;		/* pointer to the function */
-	union {
-		uint32_t  i;	/* integer description, used in lookup */
-		char s[8];	/* string description, only 4 bytes used */
-	} id;
+	minipc_f *f;			/* pointer to the function */
+	char name[MINIPC_MAX_NAME];	/* name of the function */
 	uint32_t flags;
-	uint32_t retval;	/* type of return value */
-	uint32_t args[];	/* the list of arguments, null-terminated */
+	uint32_t retval;		/* type of return value */
+	uint32_t args[];		/* zero-terminated */
 };
 /* Flags: verbosity is about argument and retval marshall/unmarshall */
 #define MINIPC_FLAG_VERBOSE		1
@@ -60,7 +63,7 @@ struct minipc_ch {
 };
 static inline int minipc_fileno(struct minipc_ch *ch) {return ch->fd;}
 
-/* These return NULL with errno on erro */
+/* These return NULL with errno on error, name is the socket pathname */
 struct minipc_ch *minipc_server_create(const char *name, int flags);
 struct minipc_ch *minipc_client_create(const char *name, int flags);
 int minipc_close(struct minipc_ch *ch);
@@ -69,10 +72,8 @@ int minipc_close(struct minipc_ch *ch);
 int minipc_set_logfile(struct minipc_ch *ch, FILE *logf);
 
 /* Server: register exported functions */
-int minipc_export(struct minipc_ch *ch, const char *name,
-		  const struct minipc_pd *pd);
-int minipc_unexport(struct minipc_ch *ch, const char *name,
-		    const struct minipc_pd *pd);
+int minipc_export(struct minipc_ch *ch, const struct minipc_pd *pd);
+int minipc_unexport(struct minipc_ch *ch, const struct minipc_pd *pd);
 
 /* Handle a request if pending, otherwise -1 and EAGAIN */
 int minipc_server_action(struct minipc_ch *ch, int timeoutms);
@@ -82,6 +83,6 @@ int minipc_server_get_fdset(struct minipc_ch *ch, fd_set *setptr);
 
 /* Client: make requests */
 int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
-		uint32_t *ret, void *args);
+		void *ret, ...);
 
 #endif /* __MINIPC_H__ */
