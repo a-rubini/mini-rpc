@@ -84,7 +84,7 @@ int minipc_export(struct minipc_ch *ch, const char *name,
 	if (link->logf)
 		fprintf(link->logf, "%s: exported %p (%s) with pd %p --"
 			"id %08x, retval %08x, args %08x...\n", __func__,
-			flist, name, pd, pd->id, pd->retval, pd->args[0]);
+			flist, name, pd, pd->id.i, pd->retval, pd->args[0]);
 	return 0;
 }
 
@@ -150,7 +150,7 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 
 	/* Arg[0] is the id of the function */
 	for (flist = link->flist; flist; flist = flist->next)
-		if (flist->pd->id == args[0])
+		if (flist->pd->id.i == args[0])
 			break;
 	if (!flist) {
 		if (link->logf)

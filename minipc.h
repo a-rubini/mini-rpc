@@ -43,10 +43,10 @@ typedef int (minipc_f)(const struct minipc_pd *, void *retval, void *args);
 /* This is the "procedure definition" */
 struct minipc_pd {
 	minipc_f *f;		/* pointer to the function */
-	union id {
+	union {
 		uint32_t  i;	/* integer description, used in lookup */
 		char s[8];	/* string description, only 4 bytes used */
-	}
+	} id;
 	uint32_t flags;
 	uint32_t retval;	/* type of return value */
 	uint32_t args[];	/* the list of arguments, null-terminated */

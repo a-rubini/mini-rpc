@@ -22,7 +22,7 @@
 struct minipc_ch *minipc_client_create(const char *name, int flags);
 
 int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
-		uint32_t *args, uint32_t *ret)
+		uint32_t *ret, void *args)
 {
 	struct mpc_link *link = mpc_get_link(ch);
 	struct pollfd pfd;
@@ -32,7 +32,7 @@ int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
 	CHECK_LINK(link);
 
 	/* Build the packet to send out */
-	newargs[0] = pd->id;
+	newargs[0] = pd->id.i;
 	newargs[1] = pd->retval;
 	for (i = 0; i < (MINIPC_MAX_ARGUMENTS - 3); i++) {
 		newargs[i+2] = args[i];
