@@ -10,7 +10,7 @@ OBJCOPY         = $(CROSS_COMPILE)objcopy
 OBJDUMP         = $(CROSS_COMPILE)objdump
 
 CFLAGS = -Wall -ggdb #-O2
-LDFLAGS = -L. -lminipc
+LDFLAGS = -L. -lminipc -lm
 
 OBJ = minipc-core.o minipc-server.o minipc-client.o
 

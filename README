@@ -174,7 +174,7 @@ For example, exporting sqrt would look like the following
   {
         double in, out;
 
-        in = *(double *)args[0];
+        in = *(double *)args;
         out = sqrt(in);
         *(double *)retval = out;
 	return 0;
@@ -225,10 +225,13 @@ Reply packets are "struct mpc_rep_packet", which has two fields:
 	uint32_t type
 	uing8_t val[]
 
-The type is checked to be the same as what is defined as "ret"
-in the "pd" structure. The val array is a plain byte array that
-is copied to the "ret" pointer passed to minipc_call (like "result"
-in the sqrt example above).
+The type is checked to be the same as what is defined as "ret" in the
+"pd" structure. The val array is a plain byte array that is copied to
+the "ret" pointer passed to minipc_call (like "result" in the sqrt
+example above). When "type" is an error value (MINIPC_ATYPE_ERROR) the
+payload is a 4-byte errno value.  Note that "type" is not passed back
+to the caller of "minipc_call()", errors are identified by a negative
+return value.
 
 
 	An example

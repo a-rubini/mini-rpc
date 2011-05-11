@@ -133,6 +133,7 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 	} else {
 		pkt_out.type = pd->retval;
 	}
+	/* send a 32-bit value plus the declared return length */
 	send(fd, &pkt_out, sizeof(pkt_out.type)
 	     + MINIPC_GET_ASIZE(pkt_out.type), 0);
 }

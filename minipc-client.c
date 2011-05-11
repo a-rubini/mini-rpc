@@ -51,8 +51,22 @@ int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
 		case MINIPC_ATYPE_INT:
 			pkt_out.args[narg++] = va_arg(ap, int);
 			break;
+		case MINIPC_ATYPE_INT64:
+			*(uint64_t *)(pkt_out.args + narg)
+				= va_arg(ap, uint64_t);
+			narg += sizeof(uint64_t) / sizeof(pkt_out.args[0]);
+			break;
+		case MINIPC_ATYPE_FLOAT:
+			*(float *)(pkt_out.args + narg) = va_arg(ap, float);
+			narg += sizeof(float) / sizeof(pkt_out.args[0]);
+			break;
+		case MINIPC_ATYPE_DOUBLE:
+			*(double *)(pkt_out.args + narg) = va_arg(ap, double);
+			narg += sizeof(double) / sizeof(pkt_out.args[0]);
+			break;
+
 		default:
-			/* FIXME: other args unsupperted */
+			/* FIXME: structures and strings */
 			break;
 		}
 	}

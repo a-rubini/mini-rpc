@@ -34,11 +34,21 @@ const struct minipc_pd ss_tod_struct = {
 	},
 };
 
+const struct minipc_pd ss_sqrt_struct = {
+	.name = "sqrt",
+	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_DOUBLE, double),
+	.args = {
+		MINIPC_ARG_ENCODE(MINIPC_ATYPE_DOUBLE, double),
+		MINIPC_ARG_END,
+	},
+};
+
 int main(int argc, char **argv)
 {
 	struct minipc_ch *client;
 	int a, b, c, ret;
 	struct timeval tv;
+	double rt_in, rt_out;
 
 	client = minipc_client_create("sample", 0);
 	if (!client) {
@@ -68,6 +78,13 @@ int main(int argc, char **argv)
 		goto error;
 	}
 	printf("%i + %i = %i\n", a, b, c);
+
+	rt_in = 2.0;
+	ret = minipc_call(client, &ss_sqrt_struct, &rt_out, rt_in);
+	if (ret < 0) {
+		goto error;
+	}
+	printf("sqrt(%lf) = %lf\n", rt_in, rt_out);
 
 	return 0;
 
