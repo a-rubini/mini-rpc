@@ -99,15 +99,8 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 	i = recv(fd, &pkt_in, sizeof(pkt_in), 0);
 	if (i < 0 && errno == EINTR)
 		 return;
-	if (i <= 0) {
-		if (link->logf)
-			fprintf(link->logf, "%s: error %i in fd %i, closing\n",
-				__func__, i < 0 ? errno : 0, fd);
-		close(fd);
-		FD_CLR(fd, &link->fdset);
-		link->fd[pos] = -1;
-		return;
-	}
+	if (i <= 0)
+		goto close_client;
 
 	/* use pkt_in.name to look for the function */
 	for (flist = link->flist; flist; flist = flist->next)
@@ -134,8 +127,19 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 		pkt_out.type = pd->retval;
 	}
 	/* send a 32-bit value plus the declared return length */
-	send(fd, &pkt_out, sizeof(pkt_out.type)
-	     + MINIPC_GET_ASIZE(pkt_out.type), 0);
+	if (send(fd, &pkt_out, sizeof(pkt_out.type)
+	     + MINIPC_GET_ASIZE(pkt_out.type), MSG_NOSIGNAL) < 0)
+		goto close_client;
+	return;
+
+ close_client:
+	if (link->logf)
+		fprintf(link->logf, "%s: error %i in fd %i, closing\n",
+			__func__, i < 0 ? errno : 0, fd);
+	close(fd);
+	FD_CLR(fd, &link->fdset);
+	link->fd[pos] = -1;
+	return;
 }
 
 static void mpc_handle_server(struct mpc_link *link, int fd)
