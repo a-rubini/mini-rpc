@@ -13,6 +13,7 @@
 #ifndef __MINIPC_INT_H__
 #define __MINIPC_INT_H__
 #include <sys/un.h>
+#include <sys/select.h>
 #include "minipc.h"
 
 /*  be safe, in case some other header had them slightly differntly */
