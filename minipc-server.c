@@ -84,6 +84,20 @@ int minipc_server_get_fdset(struct minipc_ch *ch, fd_set *setptr)
 	return 0;
 }
 
+/* Get a pointer to the next argument in the array */
+uint32_t *minipc_get_next_arg(uint32_t arg[], uint32_t atype)
+{
+	int asize;
+	char *s = (void *)arg;
+
+	if (MINIPC_GET_ATYPE(atype) != MINIPC_ATYPE_STRING)
+		asize = MINIPC_GET_ANUM(MINIPC_GET_ASIZE(atype));
+	else
+		asize = MINIPC_GET_ANUM(strlen(s));
+	return arg + asize;
+}
+
+
 /*
  * Internal functions used by server action below: handle a request
  * or the arrival of a new client

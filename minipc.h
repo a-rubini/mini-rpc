@@ -28,11 +28,11 @@
 /* Argument type (and retval type). The size is encoded in the same word */
 enum minipc_at {
 	MINIPC_ATYPE_ERROR = 0xffff,
-	MINIPC_ATYPE_NONE = 0,		/* used as terminator */
+	MINIPC_ATYPE_NONE = 0,	/* used as terminator */
 	MINIPC_ATYPE_INT = 1,
 	MINIPC_ATYPE_INT64,
-	MINIPC_ATYPE_DOUBLE,		/* float is promoted to double */
-	MINIPC_ATYPE_STRING,
+	MINIPC_ATYPE_DOUBLE,	/* float is promoted to double */
+	MINIPC_ATYPE_STRING,	/* size of strings is strlen() each time */
 	MINIPC_ATYPE_STRUCT
 };
 /* Encoding of argument type and size in one word */
@@ -74,6 +74,9 @@ int minipc_set_logfile(struct minipc_ch *ch, FILE *logf);
 /* Server: register exported functions */
 int minipc_export(struct minipc_ch *ch, const struct minipc_pd *pd);
 int minipc_unexport(struct minipc_ch *ch, const struct minipc_pd *pd);
+
+/* Server: helpers to unmarshall a string or struct from a request */
+uint32_t *minipc_get_next_arg(uint32_t arg[], uint32_t atype);
 
 /* Handle a request if pending, otherwise -1 and EAGAIN */
 int minipc_server_action(struct minipc_ch *ch, int timeoutms);

@@ -31,7 +31,7 @@ the fd is supported (thus you can use poll yourself).
 
 An exported function is defined by a data structure, which lists both
 the argument list and the return value. Data types supported are
-integers, floats, strings and generic structures.  We might (or might
+integers, doubles, strings and generic structures.  We might (or might
 not) export the thing over TCP and add endian conversion, but at this
 point the data type is really just informative.
 
@@ -195,7 +195,36 @@ For example, exporting sqrt would look like the following
         },
    }
 
-The client calling this service will call the RPC in this way,
+Please note that while using doubles or integers is easy, unmarshalling
+a string from the args array is not trivial. The library
+offers a generic unmarshall function:
+
+    uint32_t *minipc_get_next_arg(uint32_t arg[], uint32_t atype);
+
+The function receives the current pointer to an argument and the
+current type. While the argument is used as-is (with casting), the
+pointer to the next argument may be variable (because of strings) or
+need alignment in general (in the unlikely case of non-multiple-of-4
+structures).  This function offers a portable solution.
+
+Example
+
+  int export_strcat(const struct minipc_pd *pd, uint32_t *args, void *ret)
+  {
+      char *s1, char *s2, char sout[256];
+
+      s1 = (char *)args;
+      args = minipc_get_next_arg(args, pd->args[0]);
+      s2 = (char *)args;
+
+      strncpy(sout, s1, sizeof(sout));
+      strncat(sout, s2, sizeof(sout));
+      strncpy(ret, sout, MINIPC_MAX_REPLY));
+      return 0;
+  }
+
+
+The client calling the RPC server will do it in this way,
 assuming "struct minipc_ch *client" and "struct minipc_pd pd_sqrt"
 are valid variables:
 
@@ -243,3 +272,16 @@ return value.
 	--------
 
 Examples are in the subdirectory examples/ so plese check examples/README.
+
+
+	 BUGS
+	 ----
+
+Please note that there are a number of untested corner cases.
+
+- please don't try going near 1k argument/retval size, off-by-1 errors
+are most likely present (and I have no tests yet to feel safe)
+
+- strings passing is not currently tested, please wait for next test
+
+- struct passing should obviously work, but please wait for a sample/test

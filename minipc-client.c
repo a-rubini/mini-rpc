@@ -32,6 +32,7 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 	struct mpc_link *link = mpc_get_link(ch);
 	struct pollfd pfd;
 	int i, narg, size, retsize, pollnr;
+	int atype, asize;
 	va_list ap;
 	struct mpc_req_packet pkt_out = {"",};
 	struct mpc_rep_packet pkt_in;
@@ -47,16 +48,15 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 
 	va_start(ap, ret);
 	for (i = narg = 0; ; i++) {
-		if (narg >= MINIPC_MAX_ARGUMENTS) { /* unlikely */
-			if (link->logf) {
-				fprintf(link->logf,
-					"%s: max args (%i) reached\n",
-					__func__, MINIPC_MAX_ARGUMENTS);
-			}
-			break;
-		}
+		int next_narg = narg;
 
-		switch (MINIPC_GET_ATYPE(pd->args[i])) {
+		atype = MINIPC_GET_ATYPE(pd->args[i]);
+		asize = MINIPC_GET_ASIZE(pd->args[i]);
+		next_narg += MINIPC_GET_ANUM(asize);
+		if (next_narg >= MINIPC_MAX_ARGUMENTS) /* unlikely */
+			goto doesnt_fit;
+
+		switch (atype) {
 		case MINIPC_ATYPE_NONE:
 			goto out; /* end of list */
 		case MINIPC_ATYPE_INT:
@@ -65,16 +65,42 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		case MINIPC_ATYPE_INT64:
 			*(uint64_t *)(pkt_out.args + narg)
 				= va_arg(ap, uint64_t);
-			narg += sizeof(uint64_t) / sizeof(pkt_out.args[0]);
+			narg = next_narg;
 			break;
 		case MINIPC_ATYPE_DOUBLE:
 			*(double *)(pkt_out.args + narg) = va_arg(ap, double);
-			narg += sizeof(double) / sizeof(pkt_out.args[0]);
+			narg = next_narg;
+			break;
+		case MINIPC_ATYPE_STRING:
+		{
+			char *sin = va_arg(ap, void *);
+			char *sout = (void *)(pkt_out.args + narg);
+			int slen = strlen(sin);
+			int alen;
+
+			/*
+			 * argument len is arbitrary, terminate and 4-align
+			 * we can't use next_narg here, as len changes
+			 */
+			alen = MINIPC_GET_ANUM(slen + 1);
+			if (narg + alen >= MINIPC_MAX_ARGUMENTS)
+				goto doesnt_fit;
+			strcpy(sout, sin);
+			narg += alen;
+			break;
+		}
+		case MINIPC_ATYPE_STRUCT:
+			memcpy(pkt_out.args + narg, va_arg(ap, void *), asize);
+			narg = next_narg;
 			break;
 
 		default:
-			/* FIXME: structures and strings */
-			break;
+			if (link->logf) {
+				fprintf(link->logf, "%s: unkown type 0x%x\n",
+					__func__, atype);
+			}
+			errno = EPROTO;
+			return -1;
 		}
 	}
  out:
@@ -133,11 +159,20 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 	memcpy(ret, &pkt_in.val, MINIPC_GET_ASIZE(pd->retval));
 	return 0;
 
-	too_short:
+too_short:
 	if (link->logf) {
 		fprintf(link->logf, "%s: short reply (%i bytes)\n",
 			__func__, retsize);
 	}
 	errno = EPROTO;
 	return -1;
+
+doesnt_fit:
+	if (link->logf) {
+		fprintf(link->logf, "%s: rpc call \"%s\" won't fit %i slots\n",
+			__func__, pd->name, MINIPC_MAX_ARGUMENTS);
+	}
+	errno = EPROTO;
+	return -1;
+	
 }

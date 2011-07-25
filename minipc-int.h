@@ -91,4 +91,8 @@ extern void mpc_free_flist(struct mpc_link *link, struct mpc_flist *flist);
 
 extern struct minipc_ch *__minipc_link_create(const char *name, int flags);
 
+/* Used for lists and structures -- sizeof(uint32_t) is 4, is it? */
+#define MINIPC_GET_ANUM(len) (((len) + 3) >> 2)
+
+
 #endif /* __MINIPC_INT_H__ */
