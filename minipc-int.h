@@ -80,8 +80,8 @@ static inline struct mpc_link *mpc_get_link(struct minipc_ch *ch)
 }
 
 #define CHECK_LINK(link) /* Horrible shortcut, don't tell around... */	\
-		if ((link)->magic != MPC_MAGIC) {			\
-		errno = -EINVAL;					\
+	if ((link)->magic != MPC_MAGIC) {				\
+		errno = EINVAL;						\
 		return -1;						\
 	}
 

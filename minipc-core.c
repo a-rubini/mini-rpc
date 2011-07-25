@@ -56,7 +56,7 @@ int minipc_close(struct minipc_ch *ch)
 			break;
 
 	if (!*nextp) {
-		errno = -ENOENT;
+		errno = ENOENT;
 		return -1;
 	}
 
