@@ -234,9 +234,7 @@ to the caller of "minipc_call()", errors are identified by a negative
 return value.
 
 
-	An example
-	----------
+	Examples
+	--------
 
-./sample-server and ./sample-client are working examples.
-Note that a process can act as one or more server and one or more
-clients at the same time.
+Examples are in the subdirectory examples/ so plese check examples/README.

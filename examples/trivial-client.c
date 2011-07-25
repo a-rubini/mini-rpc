@@ -8,6 +8,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/time.h>
@@ -58,12 +59,17 @@ int main(int argc, char **argv)
 	}
 	minipc_set_logfile(client, stderr);
 
-	/* gettod, sum, sum, gettod */
+	/*
+	 * gettod, sum, sum, gettod
+	 * pause a while in-between, so several clients can be run
+	 * concurrently as a load test on the server
+	 */
 	ret = minipc_call(client, &ss_tod_struct, &tv, NULL);
 	if (ret < 0) {
 		goto error;
 	}
 	printf("tv: %li.%06li\n", tv.tv_sec, tv.tv_usec);
+	usleep(500*1000);
 
 	a = 345; b = 628;
 	ret = minipc_call(client, &ss_sum_struct, &c, a, b);
@@ -71,6 +77,7 @@ int main(int argc, char **argv)
 		goto error;
 	}
 	printf("%i + %i = %i\n", a, b, c);
+	usleep(500*1000);
 
 	a = 10; b = 20;
 	ret = minipc_call(client, &ss_sum_struct, &c, a, b);
@@ -78,6 +85,7 @@ int main(int argc, char **argv)
 		goto error;
 	}
 	printf("%i + %i = %i\n", a, b, c);
+	usleep(500*1000);
 
 	rt_in = 2.0;
 	ret = minipc_call(client, &ss_sqrt_struct, &rt_out, rt_in);
@@ -85,6 +93,7 @@ int main(int argc, char **argv)
 		goto error;
 	}
 	printf("sqrt(%lf) = %lf\n", rt_in, rt_out);
+	usleep(500*1000);
 
 	return 0;
 

@@ -1,0 +1,38 @@
+
+	trivial-server and trivial-client
+	---------------------------------
+
+These two were called sample-server and sample-client in earlier
+snapshots of the package (when no examples subdirectory existed).
+
+The server exports three functions:
+
+    sum: it receives two integers and returns integer
+
+    gettimeofday: it receives nothing and returns struct timeval
+
+    sqrt: it receives one double and returns one double
+
+The server shows how the minipc_pd structures are built and how the
+minipc_f function is implemented.  The first function in the file is a
+non-rpc aware function, properly wrapped by the second function.
+
+In this case the main loop of the server is simply calling the
+server action, without doing anyting else. It is verbose in its
+own looping and declares stderr as logfile for the library.
+
+
+The client declares the same "struct minipc_pd" as the server (more
+serious users should define them in a separate object file so they
+would be shared). It simply calls the server functions a few times,
+with a 0.5s delay between each call.
+
+You can test it like this from two different terminal sessions:
+
+    ./trivial-server
+
+    for n in $(seq 1 20); do
+        ./trivial-client &
+	 sleep 0.2
+    done
+
