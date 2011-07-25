@@ -18,7 +18,7 @@
 
 /* Hard limits */
 #define MINIPC_MAX_NAME		20 /* includes trailing 0 */
-#define MINIPC_MAX_CLIENTS	8
+#define MINIPC_MAX_CLIENTS	64
 #define MINIPC_MAX_ARGUMENTS	256 /* Also, max size of packet words -- 1k */
 #define MINIPC_MAX_REPLY	1024 /* bytes */
 
