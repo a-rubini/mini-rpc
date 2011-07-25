@@ -39,11 +39,22 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 	CHECK_LINK(link);
 
 	/* Build the packet to send out -- marshall args */
+	if (link->logf) {
+		fprintf(link->logf, "%s: calling \"%s\"\n",
+			__func__, pd->name);
+	}
 	strcpy(pkt_out.name, pd->name);
+
 	va_start(ap, ret);
 	for (i = narg = 0; ; i++) {
-		if (narg >= MINIPC_MAX_ARGUMENTS) /* unlikely */
+		if (narg >= MINIPC_MAX_ARGUMENTS) { /* unlikely */
+			if (link->logf) {
+				fprintf(link->logf,
+					"%s: max args (%i) reached\n",
+					__func__, MINIPC_MAX_ARGUMENTS);
+			}
 			break;
+		}
 
 		switch (MINIPC_GET_ATYPE(pd->args[i])) {
 		case MINIPC_ATYPE_NONE:
@@ -70,30 +81,63 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 	va_end(ap);
 
 	size = sizeof(pkt_out.name) + sizeof(pkt_out.args[0]) * narg;
-	if (send(ch->fd, &pkt_out, size, 0) < 0)
+	if (send(ch->fd, &pkt_out, size, 0) < 0) {
+		/* errno already set */
 		return -1;
+	}
 
 	/* Get the reply packet and return its lenght */
 	pfd.fd = ch->fd;
 	pfd.events = POLLIN | POLLHUP;
 	pfd.revents = 0;
-	if(poll(&pfd, 1, MPC_TIMEOUT) <= 0) {
+	pollnr = poll(&pfd, 1, millisec_timeout);
+	if (pollnr < 0) {
+		/* errno already set */
+		return -1;
+	}
+	if (pollnr == 0) {
 		errno = ETIMEDOUT;
 		return -1;
 	}
 	size = MINIPC_GET_ASIZE(pd->retval) + sizeof(uint32_t);
 	retsize = recv(ch->fd, &pkt_in, size, 0);
-	if (retsize != size) { /* FIXME: differentiate -1 from short reply */
-		*(int *)ret = errno;
+
+	/* if very short, we have a problem */
+	if (retsize < (sizeof(pkt_in.type)) + sizeof(int))
+		goto too_short;
+	/* remote error reported */
+	if (pkt_in.type == MINIPC_ATYPE_ERROR) {
+		int remoteerr = *(int *)&pkt_in.val;
+
+		if (link->logf) {
+			fprintf(link->logf, "%s: remote error \"%s\"\n",
+				__func__, strerror(remoteerr));
+		}
+		*(int *)ret = remoteerr;
 		errno = EREMOTEIO;
 		return -1;
 	}
 	/* another check: the return type must match */
 	if (pkt_in.type != pd->retval) {
-		*(int *)ret = EINVAL;
-		errno = EREMOTEIO;
+		if (link->logf) {
+			fprintf(link->logf, "%s: wrong code %08x (not %08x)\n",
+				__func__, pkt_in.type, pd->retval);
+		}
+		errno = EPROTO;
 		return -1;
 	}
+	/* check size */
+	if (retsize < size)
+		goto too_short;
+	/* all good */
 	memcpy(ret, &pkt_in.val, MINIPC_GET_ASIZE(pd->retval));
-	return 0; /* FIXME: return size must be checked */
+	return 0;
+
+	too_short:
+	if (link->logf) {
+		fprintf(link->logf, "%s: short reply (%i bytes)\n",
+			__func__, retsize);
+	}
+	errno = EPROTO;
+	return -1;
 }

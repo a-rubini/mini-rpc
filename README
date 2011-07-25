@@ -97,10 +97,15 @@ data item.  The minipc_call function picks data from the variable arguments
 according to the argument types set forth in the "pd" procedure
 definition. Similarly, the return value is stored where pointed by
 ret, according to pd->retval.  Note that the return value must at least
-be 4 bytes long.  The "minipc_call" returns 0 on success
-and -1 with errno on failure.  Remote failures are reported as
-EREMOTEIO, storing an integer number using the retval pointer (all return
-values are at least int-sized already).
+be 4 bytes long.
+
+The "minipc_call" returns 0 on success and -1 with errno on failure.
+If send, poll or recv return an error, such errno is preserved.
+If poll times out (using the provided timeout) errno is set to ETIMEDOUT.
+If the server returns an error (using MINIPC_ATYPE_ERROR), the
+local errno is set to EREMOTEIO and the remote one is saved using
+the retval pointer (which is guaranteer to point to an int-sized or bigger
+area).
 
 To close the connection, a client can call
 
@@ -147,7 +152,7 @@ contents.
 The server action either accepts a new client or handles all pending
 client requests. For every packet received from a client, a reply
 packet is sent back. So, even if communication is based on SOCK_STREAM,
-packet boundaries should be preserved.
+packet boundaries are preserved by using only synchronous communication.
 
 the "get_fdset" function returns an fdset structure, so the caller
 may use select() in the main loop by augmenting the minipc fdset
