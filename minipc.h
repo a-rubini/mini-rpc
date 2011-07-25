@@ -82,7 +82,7 @@ int minipc_server_action(struct minipc_ch *ch, int timeoutms);
 int minipc_server_get_fdset(struct minipc_ch *ch, fd_set *setptr);
 
 /* Client: make requests */
-int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
-		void *ret, ...);
+int minipc_call(struct minipc_ch *ch, int millisec_timeout,
+		const struct minipc_pd *pd, void *ret, ...);
 
 #endif /* __MINIPC_H__ */

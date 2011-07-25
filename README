@@ -88,8 +88,8 @@ for each request).
 
 A client can make a request like this:
 
-  int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
-                void *ret, ...);
+  int minipc_call(struct minipc_ch *ch, int millisec_timeout,
+                const struct minipc_pd *pd, void *ret, ...);
 
 The arguments are passed as a list of values (stuctures and strings
 are passed by pointer); the return pointer is filled with the returned

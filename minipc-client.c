@@ -26,12 +26,12 @@ struct minipc_ch *minipc_client_create(const char *name, int f)
 	return __minipc_link_create(name, MPC_USER_FLAGS(f) | MPC_FLAG_CLIENT);
 }
 
-int minipc_call(struct minipc_ch *ch, const struct minipc_pd *pd,
-		void *ret, ...)
+int minipc_call(struct minipc_ch *ch, int millisec_timeout,
+		const struct minipc_pd *pd, void *ret, ...)
 {
 	struct mpc_link *link = mpc_get_link(ch);
 	struct pollfd pfd;
-	int i, narg, size, retsize;
+	int i, narg, size, retsize, pollnr;
 	va_list ap;
 	struct mpc_req_packet pkt_out = {"",};
 	struct mpc_rep_packet pkt_in;

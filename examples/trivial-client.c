@@ -15,6 +15,7 @@
 
 #include "minipc.h"
 
+#define TRIVIAL_TIMEOUT 100 /* ms */
 
 /* The description here is the same as in the server */
 const struct minipc_pd ss_sum_struct = {
@@ -64,7 +65,7 @@ int main(int argc, char **argv)
 	 * pause a while in-between, so several clients can be run
 	 * concurrently as a load test on the server
 	 */
-	ret = minipc_call(client, &ss_tod_struct, &tv, NULL);
+	ret = minipc_call(client, TRIVIAL_TIMEOUT, &ss_tod_struct, &tv, NULL);
 	if (ret < 0) {
 		goto error;
 	}
@@ -72,7 +73,7 @@ int main(int argc, char **argv)
 	usleep(500*1000);
 
 	a = 345; b = 628;
-	ret = minipc_call(client, &ss_sum_struct, &c, a, b);
+	ret = minipc_call(client, TRIVIAL_TIMEOUT, &ss_sum_struct, &c, a, b);
 	if (ret < 0) {
 		goto error;
 	}
@@ -80,7 +81,7 @@ int main(int argc, char **argv)
 	usleep(500*1000);
 
 	a = 10; b = 20;
-	ret = minipc_call(client, &ss_sum_struct, &c, a, b);
+	ret = minipc_call(client, TRIVIAL_TIMEOUT, &ss_sum_struct, &c, a, b);
 	if (ret < 0) {
 		goto error;
 	}
@@ -88,7 +89,7 @@ int main(int argc, char **argv)
 	usleep(500*1000);
 
 	rt_in = 2.0;
-	ret = minipc_call(client, &ss_sqrt_struct, &rt_out, rt_in);
+	ret = minipc_call(client, TRIVIAL_TIMEOUT, &ss_sqrt_struct, &rt_out, rt_in);
 	if (ret < 0) {
 		goto error;
 	}
