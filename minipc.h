@@ -30,8 +30,7 @@ enum minipc_at {
 	MINIPC_ATYPE_NONE = 0,		/* used as terminator */
 	MINIPC_ATYPE_INT = 1,
 	MINIPC_ATYPE_INT64,
-	MINIPC_ATYPE_FLOAT,
-	MINIPC_ATYPE_DOUBLE,
+	MINIPC_ATYPE_DOUBLE,		/* float is promoted to double */
 	MINIPC_ATYPE_STRING,
 	MINIPC_ATYPE_STRUCT
 };
