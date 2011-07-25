@@ -142,7 +142,7 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 	return;
 }
 
-static void mpc_handle_server(struct mpc_link *link, int fd)
+static void mpc_handle_connection(struct mpc_link *link, int fd)
 {
 	int i, newfd;
 	struct sockaddr_un sun;
@@ -208,6 +208,6 @@ int minipc_server_action(struct minipc_ch *ch, int timeoutms)
 	}
 	/* Finally, look for a new client */
 	if (FD_ISSET(ch->fd, &set))
-		mpc_handle_server(link, ch->fd);
+		mpc_handle_connection(link, ch->fd);
 	return 0;
 }
