@@ -23,7 +23,7 @@ all: $(PROGS)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
 # This is stupid, it won't apply the first time, but, well... it works
-$(wildcard *.o): $(wildcard ../*.h ../*.a)
+$(PROGS): $(wildcard ../*.h ../*.a)
 
 clean:
 	rm -f *.o *~ $(PROGS)
