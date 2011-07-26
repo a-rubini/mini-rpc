@@ -124,7 +124,9 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 		if (link->logf)
 			fprintf(link->logf, "%s: function %s not found\n",
 				__func__, pkt_in.name);
-		return;
+		pkt_out.type = MINIPC_ARG_ENCODE(MINIPC_ATYPE_ERROR, int);
+		*(int *)(&pkt_out.val) = EOPNOTSUPP;
+		goto send_reply;
 	}
 	pd = flist->pd;
 	if (link->logf)
@@ -140,6 +142,8 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 	} else {
 		pkt_out.type = pd->retval;
 	}
+
+ send_reply:
 	/* send a 32-bit value plus the declared return length */
 	if (send(fd, &pkt_out, sizeof(pkt_out.type)
 	     + MINIPC_GET_ASIZE(pkt_out.type), MSG_NOSIGNAL) < 0)
