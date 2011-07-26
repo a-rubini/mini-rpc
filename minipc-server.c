@@ -134,13 +134,21 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 			__func__, pd->name);
 
 	/* call the function and send back stuff */
-	pkt_out.type = pd->retval;
-	i = pd->f(pd, pkt_in.args, &pkt_out.val);
+	i = pd->f(pd, pkt_in.args, pkt_out.val);
 	if (i < 0) {
 		pkt_out.type = MINIPC_ARG_ENCODE(MINIPC_ATYPE_ERROR, int);
 		*(int *)(&pkt_out.val) = errno;
 	} else {
-		pkt_out.type = pd->retval;
+		/* Use retval, but fix the length for strings */
+		if (MINIPC_GET_ATYPE(pd->retval) == MINIPC_ATYPE_STRING) {
+			int size = strlen(pkt_out.val) + 1;
+
+			size = (size + 3) & ~3; /* align */
+			pkt_out.type =
+				__MINIPC_ARG_ENCODE(MINIPC_ATYPE_STRING, size);
+		} else {
+			pkt_out.type = pd->retval;
+		}
 	}
 
  send_reply:

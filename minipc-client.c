@@ -125,14 +125,15 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		errno = ETIMEDOUT;
 		return -1;
 	}
+	/* this "size" is wrong for strings, so recv the max packet size */
 	size = MINIPC_GET_ASIZE(pd->retval) + sizeof(uint32_t);
-	retsize = recv(ch->fd, &pkt_in, size, 0);
+	retsize = recv(ch->fd, &pkt_in, sizeof(pkt_in), 0);
 
 	/* if very short, we have a problem */
 	if (retsize < (sizeof(pkt_in.type)) + sizeof(int))
 		goto too_short;
 	/* remote error reported */
-	if (pkt_in.type == MINIPC_ATYPE_ERROR) {
+	if (MINIPC_GET_ATYPE(pkt_in.type) == MINIPC_ATYPE_ERROR) {
 		int remoteerr = *(int *)&pkt_in.val;
 
 		if (link->logf) {
@@ -144,7 +145,7 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		return -1;
 	}
 	/* another check: the return type must match */
-	if (pkt_in.type != pd->retval) {
+	if (MINIPC_GET_ATYPE(pkt_in.type) != MINIPC_GET_ATYPE(pd->retval)) {
 		if (link->logf) {
 			fprintf(link->logf, "%s: wrong code %08x (not %08x)\n",
 				__func__, pkt_in.type, pd->retval);
@@ -156,7 +157,7 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 	if (retsize < size)
 		goto too_short;
 	/* all good */
-	memcpy(ret, &pkt_in.val, MINIPC_GET_ASIZE(pd->retval));
+	memcpy(ret, &pkt_in.val, MINIPC_GET_ASIZE(pkt_in.type));
 	return 0;
 
 too_short:
