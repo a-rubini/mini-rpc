@@ -74,6 +74,26 @@ static int pty_server_do_strlen(const struct minipc_pd *pd,
 	return 0;
 }
 
+/* strcat two remote strings and pass the result back */
+static int pty_server_do_strcat(const struct minipc_pd *pd,
+			       uint32_t *args, void *ret)
+{
+	char *s, *t;
+	char scat[256];
+
+	s = (void *)args;
+	args = minipc_get_next_arg(args, pd->args[0]);
+	t = (void *)args;
+
+	strncpy(scat, s, sizeof(scat));
+	strncat(scat, t, sizeof(scat));
+
+	strcpy(ret, scat); /* FIXME: max size */
+	return 0;
+}
+
+
+
 
 /*
  * The following is called by the main function, and exports stuff.
@@ -99,6 +119,7 @@ int pty_export_functions(struct minipc_ch *ch, int fdm, struct pty_counts *pc)
 		{&rpc_setenv, pty_server_do_setenv},
 		{&rpc_feed, pty_server_do_feed},
 		{&rpc_strlen, pty_server_do_strlen},
+		{&rpc_strcat, pty_server_do_strcat},
 	};
 
 	/*

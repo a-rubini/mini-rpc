@@ -76,6 +76,19 @@ static int do_strlen(struct minipc_ch *client, char **argv)
 	return 0;
 }
 
+/* calculate a remote strcat */
+static int do_strcat(struct minipc_ch *client, char **argv)
+{
+	int ret;
+	char buf[256]; /* FIXME: size limits? */
+	ret = minipc_call(client, CLIENT_TIMEOUT, &rpc_strcat, buf,
+			  argv[2], argv[3]);
+	if (ret < 0)
+		return ret;
+	printf("strcat(%s,%s) = %s\n", argv[2], argv[3], buf);
+	return 0;
+}
+
 /*
  * This is a parsing table for argv[1]
  */
@@ -89,6 +102,7 @@ struct {
 	{ "setenv", do_setenv, 4},
 	{ "feed", do_feed, 3},
 	{ "strlen", do_strlen, 3},
+	{ "strcat", do_strcat, 4},
 	{NULL, },
 };
 
