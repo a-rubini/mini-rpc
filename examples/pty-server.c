@@ -65,6 +65,20 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	/* Log file for diagnostics */
+	{
+		char name[] = "/tmp/pty-server.XXXXXX";
+		int logfd;
+		FILE *logf;
+
+		logfd = mkstemp(name);
+		if (logfd >= 0) {
+			logf = fdopen(logfd, "w");
+			if (logf)
+				minipc_set_logfile(ch, logf);
+		}
+	}
+
 	/* Register your functions: all our RPC is split to another source */
 	if (pty_export_functions(ch, fdm, &counters)) {
 		fprintf(stderr, "%s: exporting RPC functions: %s\n", argv[0],
