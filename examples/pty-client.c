@@ -64,6 +64,18 @@ static int do_feed(struct minipc_ch *client, char **argv)
 	return 0;
 }
 
+/* calculate a remote strlen */
+static int do_strlen(struct minipc_ch *client, char **argv)
+{
+	int ret, len;
+
+	ret = minipc_call(client, CLIENT_TIMEOUT, &rpc_strlen, &len, argv[2]);
+	if (ret < 0)
+		return ret;
+	printf("strlen(%s) = %i\n", argv[2], len);
+	return 0;
+}
+
 /*
  * This is a parsing table for argv[1]
  */
@@ -76,6 +88,7 @@ struct {
 	{ "getenv", do_getenv, 3},
 	{ "setenv", do_setenv, 4},
 	{ "feed", do_feed, 3},
+	{ "strlen", do_strlen, 3},
 	{NULL, },
 };
 

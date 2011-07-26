@@ -64,6 +64,16 @@ static int pty_server_do_feed(const struct minipc_pd *pd,
 	return 0;
 }
 
+/* calculate strlen for a string of the client */
+static int pty_server_do_strlen(const struct minipc_pd *pd,
+			       uint32_t *args, void *ret)
+{
+	char *s = (void *)args;
+
+	*(int *)ret = strlen(s);
+	return 0;
+}
+
 
 /*
  * The following is called by the main function, and exports stuff.
@@ -88,6 +98,7 @@ int pty_export_functions(struct minipc_ch *ch, int fdm, struct pty_counts *pc)
 		{&rpc_getenv, pty_server_do_getenv},
 		{&rpc_setenv, pty_server_do_setenv},
 		{&rpc_feed, pty_server_do_feed},
+		{&rpc_strlen, pty_server_do_strlen},
 	};
 
 	/*
