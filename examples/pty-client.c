@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/stat.h>
 
 #include "minipc.h"
 #include "pty-server.h"
@@ -89,6 +90,24 @@ static int do_strcat(struct minipc_ch *client, char **argv)
 	return 0;
 }
 
+/* ask for a remote stat on a passed filename */
+static int do_stat(struct minipc_ch *client, char **argv)
+{
+	int ret;
+	struct stat stbuf;
+
+	ret = minipc_call(client, CLIENT_TIMEOUT, &rpc_stat, &stbuf,
+			  argv[2]);
+	if (ret < 0)
+		return ret;
+	printf("stat(\"%s\"):\n", argv[2]);
+	printf("dev %04x, inode %i, mode %o (rdev %04x), size %i\n",
+	       (int)stbuf.st_dev, (int)stbuf.st_ino, stbuf.st_mode,
+	       (int)stbuf.st_rdev, (int)stbuf.st_size);
+
+	return 0;
+}
+
 /*
  * This is a parsing table for argv[1]
  */
@@ -103,6 +122,7 @@ struct {
 	{ "feed", do_feed, 3},
 	{ "strlen", do_strlen, 3},
 	{ "strcat", do_strcat, 4},
+	{ "stat", do_stat, 3},
 	{NULL, },
 };
 

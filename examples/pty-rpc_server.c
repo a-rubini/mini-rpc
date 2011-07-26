@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "minipc.h"
 #include "pty-server.h"
@@ -92,7 +94,18 @@ static int pty_server_do_strcat(const struct minipc_pd *pd,
 	return 0;
 }
 
+/* stat a pathname received from the remote party */
+static int pty_server_do_stat(const struct minipc_pd *pd,
+			       uint32_t *args, void *ret)
+{
+	struct stat stbuf;
+	char *fname = (void *)args;
 
+	if (stat(fname, &stbuf) < 0)
+		return -1;
+	memcpy(ret, &stbuf, sizeof(stbuf));
+	return 0;
+}
 
 
 /*
@@ -120,6 +133,7 @@ int pty_export_functions(struct minipc_ch *ch, int fdm, struct pty_counts *pc)
 		{&rpc_feed, pty_server_do_feed},
 		{&rpc_strlen, pty_server_do_strlen},
 		{&rpc_strcat, pty_server_do_strcat},
+		{&rpc_stat, pty_server_do_stat},
 	};
 
 	/*
