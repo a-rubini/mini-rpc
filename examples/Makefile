@@ -15,6 +15,7 @@ CFLAGS = -Wall -ggdb -I.. -O2
 LDFLAGS = -L.. -lminipc -lm
 
 PROGS = trivial-server trivial-client
+PROGS += pty-server pty-client
 
 all: $(PROGS)
 
@@ -22,8 +23,15 @@ all: $(PROGS)
 %: %.c
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
+pty-server: pty-server.o pty-rpc_server.o pty-rpc_structs.o
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) -lutil -o $@
+
+pty-client: pty-client.o pty-rpc_structs.o
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+
+
 # This is stupid, it won't apply the first time, but, well... it works
-$(PROGS): $(wildcard ../*.h ../*.a)
+$(PROGS) $(wildcard *.o): $(wildcard ../*.h ../*.a)
 
 clean:
 	rm -f *.o *~ $(PROGS)
