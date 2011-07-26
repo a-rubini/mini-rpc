@@ -30,6 +30,29 @@ static int do_count(struct minipc_ch *client, char **argv)
 	return 0;
 }
 
+/* getenv and setenv in the remote process */
+static int do_getenv(struct minipc_ch *client, char **argv)
+{
+	int ret;
+	char buf[256]; /* FIXME: size limits? */
+	ret = minipc_call(client, CLIENT_TIMEOUT, &rpc_getenv, buf, argv[2]);
+	if (ret < 0)
+		return ret;
+	printf("getenv(%s) = %s\n", argv[2], buf);
+	return 0;
+}
+
+static int do_setenv(struct minipc_ch *client, char **argv)
+{
+	int ret, ret2;
+	ret = minipc_call(client, CLIENT_TIMEOUT, &rpc_setenv, &ret2, argv[2],
+			  argv[3]);
+	if (ret < 0)
+		return ret;
+	printf("setenv %s = %s : success\n", argv[2], argv[3]);
+	return 0;
+}
+
 /*
  * This is a parsing table for argv[1]
  */
@@ -39,6 +62,8 @@ struct {
 	int argc;
 } *cp, calls[] = {
 	{ "count", do_count, 2},
+	{ "getenv", do_getenv, 3},
+	{ "setenv", do_setenv, 4},
 	{NULL, },
 };
 

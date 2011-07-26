@@ -11,6 +11,9 @@
  * This file includes the RPC functions exported by the server.
  * RPC-related stuff has been split to a different file for clarity.
  */
+#include <stdlib.h>
+#include <string.h>
+
 #include "minipc.h"
 #include "pty-server.h"
 
@@ -26,6 +29,28 @@ static int pty_server_do_count(const struct minipc_pd *pd,
 	return 0;
 }
 
+/* Run getenv and setenv on behalf of the client */
+static int pty_server_do_getenv(const struct minipc_pd *pd,
+			       uint32_t *args, void *ret)
+{
+	char *envname = (void *)args;
+	char *res = getenv(envname);
+
+	strcpy(ret, res); /* FIXME: max size */
+	return 0;
+}
+static int pty_server_do_setenv(const struct minipc_pd *pd,
+			       uint32_t *args, void *ret)
+{
+	char *envname = (void *)args;
+	char *envval;
+
+	args = minipc_get_next_arg(args, pd->args[0]);
+	envval = (void *)args;
+
+	setenv(envname, envval, 1);
+	return 0;
+}
 
 
 /*
@@ -48,6 +73,8 @@ int pty_export_functions(struct minipc_ch *ch, int fdm, struct pty_counts *pc)
 		minipc_f *f;
 	} export_list [] = {
 		{&rpc_count, pty_server_do_count},
+		{&rpc_getenv, pty_server_do_getenv},
+		{&rpc_setenv, pty_server_do_setenv},
 	};
 
 	/*
