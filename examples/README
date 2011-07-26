@@ -36,3 +36,42 @@ You can test it like this from two different terminal sessions:
 	 sleep 0.2
     done
 
+
+
+	pty-server and pty-client
+	-------------------------
+
+This is a more complete example. It shows how to multiplex rpc
+operations and other operations by using th rpc fd_set together with
+your own channels.
+
+The server creates a pty and runs an underlying shell. If feeds its
+own stdin to the shell and the shell's stdout to its own stdout.  Call
+it with no arguments. It logs to /tmp/pty-server.XXXXXX, created with
+mkstemp().
+
+The rpc client (called pty-client) can ask for the statistics of
+bytes read/written in the new pty that has been created, can read
+or write environment variables in the pty-server application, it
+can feed strings to the shell driven by the pty server, run strlen
+and strcat remotely, and remotely
+run the stat system call (to check string and structure exchange).  Each
+pty-client run takes a commandline, like this:
+
+	./pty-client count
+	./pty-client getenv <name>
+	./pty-client setenv <name> <value>
+	./pty-client feed <shell-command>
+	./pty-client strlen <string>
+	./pty-client strcat <string> <string>
+	./pty-client stat <filename>
+
+The commands count, feed, strlen, strcat and stat can be verified
+by just inspecting the output. The setenv command and getenv commands
+can be cross-verified.
+
+Note that only one pty-server can be running at a time (as the rpc
+socket is a static name).
+
+The sharing of minipc_pd (procedure description) is accomplished by
+linking the same object file in both programs, to avoid code duplication.
