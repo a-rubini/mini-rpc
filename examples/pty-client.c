@@ -53,6 +53,17 @@ static int do_setenv(struct minipc_ch *client, char **argv)
 	return 0;
 }
 
+/* send a string to the subshell of the server */
+static int do_feed(struct minipc_ch *client, char **argv)
+{
+	int ret, ret2;
+	ret = minipc_call(client, CLIENT_TIMEOUT, &rpc_feed, &ret2, argv[2]);
+	if (ret < 0)
+		return ret;
+	printf("feeded %s : success\n", argv[2]);
+	return 0;
+}
+
 /*
  * This is a parsing table for argv[1]
  */
@@ -64,6 +75,7 @@ struct {
 	{ "count", do_count, 2},
 	{ "getenv", do_getenv, 3},
 	{ "setenv", do_setenv, 4},
+	{ "feed", do_feed, 3},
 	{NULL, },
 };
 
