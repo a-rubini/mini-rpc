@@ -93,7 +93,7 @@ uint32_t *minipc_get_next_arg(uint32_t arg[], uint32_t atype)
 	if (MINIPC_GET_ATYPE(atype) != MINIPC_ATYPE_STRING)
 		asize = MINIPC_GET_ANUM(MINIPC_GET_ASIZE(atype));
 	else
-		asize = MINIPC_GET_ANUM(strlen(s));
+		asize = MINIPC_GET_ANUM(strlen(s) + 1);
 	return arg + asize;
 }
 
