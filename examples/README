@@ -75,3 +75,65 @@ socket is a static name).
 
 The sharing of minipc_pd (procedure description) is accomplished by
 linking the same object file in both programs, to avoid code duplication.
+
+
+	mbox-bridge and friends
+	-----------------------
+
+The "mailbox-bridge" example shows how to route mini-ipc requests to
+another process through shared memory. Sure there is no real interest
+in shared memory, but the same approach can be used with mailbox-kind
+communication mechanisms to talk with hardware, or a CPU without OS
+running on FPGA.
+
+This example is made up of three programs:
+
+     mbox-bridge: acts both as a server and a client of the mini-ipc
+     protocol, routing requests to and from a shared-memory mailbox.
+     As mini-ipc client, it requests the current time to trivial-server.
+     As mini-ipc server, it replies to stat(2) calls for local filenames.
+
+     mbox-process: the "remote" process, only communicating though
+     the mailbox device. It asks for the current time once a
+     secondo and can serve stat(2) requests when they happen.
+
+     mbox-client: a program that reads stdin forever, asking a
+     stat(2) for every line it reads.
+
+To demonstrate the mechanism, you'll need to run trivial-server (which
+answers timeofday() queries), mbox-bridge (to bridge requests),
+mbox-process and one or more mbox-client processes.
+
+This an example output from mbox-bridge (which passes gettimeofday
+requests silently, but uses mini-ipc verbose logging to stderr:
+
+   minipc_export: exported 0x8a3d228 (stat) with pd 0x804a1a0
+                   -- retval 00050058, args 00040004...
+   mpc_handle_connection: accept returned fd 5 (error 0)
+   mpc_handle_client: request for stat
+   mpc_handle_client: request for stat
+   mpc_handle_client: request for stat
+   mpc_handle_client: error 0 in fd 5, closing
+   mpc_handle_connection: accept returned fd 5 (error 0)
+   mpc_handle_client: request for stat
+   mpc_handle_client: request for stat
+   mpc_handle_client: error 0 in fd 5, closing
+   mpc_handle_connection: accept returned fd 5 (error 0)
+   mpc_handle_connection: accept returned fd 6 (error 0)
+   mpc_handle_client: request for stat
+   mpc_handle_client: error 0 in fd 6, closing
+
+This is the output from mbox-process, which reports all actions:
+
+   time: 1326231447.212400
+   time: 1326231448.218001
+   time: 1326231449.233714
+   Serving stat(/home/rubini)
+   time: 1326231450.240125
+
+And this is what happened in one of the mbox-client:
+
+   /home/rubini
+   minipc_call: calling "stat"
+   /home/rubini:
+   mode 40755, size 32768, owner 410, atime 1326230999
