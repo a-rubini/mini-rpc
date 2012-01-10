@@ -2,3 +2,6 @@ trivial-server
 trivial-client
 pty-server
 pty-client
+mbox-bridge
+mbox-client
+mbox-process
