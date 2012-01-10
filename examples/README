@@ -18,7 +18,7 @@ minipc_f function is implemented.  The first function in the file is a
 non-rpc aware function, properly wrapped by the second function.
 
 In this case the main loop of the server is simply calling the
-server action, without doing anyting else. It is verbose in its
+server action, without doing anything else. It is verbose in its
 own looping and declares stderr as logfile for the library.
 
 

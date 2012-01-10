@@ -91,7 +91,7 @@ A client can make a request like this:
   int minipc_call(struct minipc_ch *ch, int millisec_timeout,
                 const struct minipc_pd *pd, void *ret, ...);
 
-The arguments are passed as a list of values (stuctures and strings
+The arguments are passed as a list of values (structures and strings
 are passed by pointer); the return pointer is filled with the returned
 data item.  The minipc_call function picks data from the variable arguments
 according to the argument types set forth in the "pd" procedure
@@ -144,7 +144,7 @@ The following functions are available for the server:
 
 
 The export and unexport functions should be self-explicative. Note
-that the exported funcion name is part of the pd structure. The "pd"
+that the exported function name is part of the pd structure. The "pd"
 passed to "minipc_unexport" must be the same as the one passed to
 "minipc_export", not just a pointer to a data structure with the same
 contents.
@@ -156,7 +156,7 @@ packet boundaries are preserved by using only synchronous communication.
 
 the "get_fdset" function returns an fdset structure, so the caller
 may use select() in the main loop by augmenting the minipc fdset
-with its oen.  The server action calls poll on itself (with the
+with its own.  The server action calls poll on itself (with the
 specified timeout), so if you already used select you can pass 0
 as timeoutms in minipc_server_action.
 
@@ -241,7 +241,7 @@ are valid variables:
         ----------------------
 
 The protocol is an internal detail, but worth knowing in case a bug is
-discovered. Relevan structures are in the internal header
+discovered. Relevant structures are in the internal header
 "minipc-int.h".
 
 Request packets are "struct mpc_req_packet", thus build:
@@ -252,7 +252,7 @@ Request packets are "struct mpc_req_packet", thus build:
 Each argument passed to the remote function is stored into one or
 more such 32-bit integers, in host byte order. Note that the
 actual size of the argument is written in the "pd" args list.
-Marshalling is preformed by minipc_call() with varargs evaluation.
+Marshalling is performed by minipc_call() with varargs evaluation.
 
 Reply packets are "struct mpc_rep_packet", which has two fields:
 
@@ -271,7 +271,7 @@ return value.
 	Examples
 	--------
 
-Examples are in the subdirectory examples/ so plese check examples/README.
+Examples are in the subdirectory examples/ so please check examples/README.
 
 
 	 BUGS
