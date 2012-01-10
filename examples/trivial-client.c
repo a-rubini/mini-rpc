@@ -52,7 +52,7 @@ int main(int argc, char **argv)
 	struct timeval tv;
 	double rt_in, rt_out;
 
-	client = minipc_client_create("sample", 0);
+	client = minipc_client_create("trivial", 0);
 	if (!client) {
 		fprintf(stderr, "%s: client_create(): %s\n", argv[0],
 			strerror(errno));

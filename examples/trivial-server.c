@@ -89,7 +89,7 @@ int main(int argc, char **argv)
 {
 	struct minipc_ch *server;
 
-	server = minipc_server_create("sample", 0);
+	server = minipc_server_create("trivial", 0);
 	if (!server) {
 		fprintf(stderr, "%s: server_create(): %s\n", argv[0],
 			strerror(errno));
