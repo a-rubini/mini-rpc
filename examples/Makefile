@@ -16,6 +16,7 @@ LDFLAGS = -L.. -lminipc -lm
 
 PROGS = trivial-server trivial-client
 PROGS += pty-server pty-client
+PROGS += mbox-process mbox-bridge mbox-client
 
 all: $(PROGS)
 
