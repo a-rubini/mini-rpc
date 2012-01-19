@@ -141,7 +141,7 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 	} else {
 		/* Use retval, but fix the length for strings */
 		if (MINIPC_GET_ATYPE(pd->retval) == MINIPC_ATYPE_STRING) {
-			int size = strlen(pkt_out.val) + 1;
+			int size = strlen((char *)pkt_out.val) + 1;
 
 			size = (size + 3) & ~3; /* align */
 			pkt_out.type =

@@ -90,11 +90,15 @@ int main(int argc, char **argv)
 	 * Now, we must mirror stdin/stdout to the pty master, with RPC too.
 	 * The first step is horribly changing the termios of our tty
 	 */
-	close(fds); system("stty raw -echo");
+	close(fds);
+	if (system("stty raw -echo") < 0) {
+		fprintf(stderr, "%s: can't run \"stty\"\n", argv[0]);
+		exit(1);
+	}
 
 	while (waitpid(pid, NULL, WNOHANG) != pid) {
 		fd_set set;
-		int nfd, i;
+		int nfd, i, j;
 		char buf[256];
 
 		/* ask the RPC engine its current fdset and augment it */
@@ -117,16 +121,22 @@ int main(int argc, char **argv)
 		if (FD_ISSET(STDIN_FILENO, &set)) {
 			i = read(0, buf, sizeof(buf));
 			if (i > 0) {
-				write(fdm, buf, i);
 				counters.in += i;
+				do {
+					j = write(fdm, buf, i);
+					i -= j;
+				} while (i && j >= 0);
 			}
 			nfd--;
 		}
 		if (FD_ISSET(fdm, &set)) {
 			i = read(fdm, buf, sizeof(buf));
 			if (i > 0) {
-				write(1, buf, i);
 				counters.out += i;
+				do {
+					j = write(1, buf, i);
+					i -= j;
+				} while (i && j >= 0);
 			}
 			nfd--;
 		}
@@ -144,6 +154,7 @@ int main(int argc, char **argv)
 	}
 
 	/* The child shell exited, reset the tty and exit. Let RPC die out */
-	system("stty sane");
+	if (system("stty sane") < 0)
+		fprintf(stderr, "%s: can't restore tty settings\n", argv[0]);
 	exit(exitval);
 }

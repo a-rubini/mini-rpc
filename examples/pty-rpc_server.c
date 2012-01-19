@@ -60,9 +60,10 @@ static int pty_server_do_feed(const struct minipc_pd *pd,
 			       uint32_t *args, void *ret)
 {
 	char *command = (void *)args;
+	int wrote;
 
-	write(saved_fdm, command, strlen(command));
-	write(saved_fdm, "\n", 1);
+	wrote = write(saved_fdm, command, strlen(command));
+	wrote += write(saved_fdm, "\n", 1);
 	return 0;
 }
 
@@ -88,7 +89,7 @@ static int pty_server_do_strcat(const struct minipc_pd *pd,
 	t = (void *)args;
 
 	strncpy(scat, s, sizeof(scat));
-	strncat(scat, t, sizeof(scat));
+	strncat(scat, t, sizeof(scat) - strlen(s));
 
 	strcpy(ret, scat); /* FIXME: max size */
 	return 0;
