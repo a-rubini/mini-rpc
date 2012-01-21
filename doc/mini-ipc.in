@@ -1,0 +1,75 @@
+\input texinfo    @c -*-texinfo-*-
+%
+% mini-ipc.in - main file for the documentation
+%
+%%%%
+
+%------------------------------------------------------------------------------
+%
+%                         NOTE FOR THE UNAWARE USER
+%                         =========================
+%
+%    This file is a texinfo source. It isn't the binary file of some strange
+%    editor of mine. If you want ASCII, you should "make mini-ipc.txt".
+%
+%------------------------------------------------------------------------------
+
+%
+% This is not a conventional info file...
+% I use three extra features:
+%   - The '%' as a comment marker, if at beginning of line ("\%" -> "%")
+%   - leading blanks are allowed (this is something I can't live without)
+%   - braces are automatically escaped when they appear in example blocks
+%
+
+@comment %**start of header
+@documentlanguage en
+@documentencoding ISO-8859-1
+@setfilename mini-ipc.info
+@settitle mini-ipc
+@iftex
+@afourpaper
+@end iftex
+@paragraphindent none
+@comment %**end of header
+
+@setchapternewpage off
+
+@set update-month January 2012
+
+@finalout
+
+@titlepage
+@title mini-ipc
+@subtitle @value{update-month}
+@subtitle A minimal inter-process-communication library
+@author Alessandro Rubini (@code{rubini@@gnudd.com})
+@end titlepage
+@headings single
+
+@c ##########################################################################
+@iftex
+@contents
+@end iftex
+
+@c ##########################################################################
+@node Top
+@top Introduction
+
+@menu
+* Examples::                    
+@end menu
+
+@c ##########################################################################
+@node Examples
+@chapter Examples
+
+
+
+@c ##########################################################################
+@bye
+
+
+@c  LocalWords:  gnudd titlepage iftex texinfo CERN documentlanguage settitle
+@c  LocalWords:  documentencoding setfilename afourpaper paragraphindent
+@c  LocalWords:  setchapternewpage finalout

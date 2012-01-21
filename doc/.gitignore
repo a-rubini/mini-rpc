@@ -1,0 +1,15 @@
+*~
+*.aux
+*.cp
+*.fn
+*.html
+*.info
+*.ky
+*.log
+*.pdf
+*.pg
+*.texi
+*.toc
+*.tp
+*.txt
+*.vr
