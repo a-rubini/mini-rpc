@@ -42,7 +42,7 @@
 @titlepage
 @title mini-ipc
 @subtitle @value{update-month}
-@subtitle A minimal inter-process-communication library
+@subtitle A misnamed minimal RPC library
 @author Alessandro Rubini (@code{rubini@@gnudd.com})
 @end titlepage
 @headings single
@@ -56,20 +56,593 @@
 @node Top
 @top Introduction
 
+This is a mini remote procedure call, but I called it IPC in error.
+The short name throughout the project is @code{minipc}, used both as
+a prefix for exported symbols and header/library name.
+
+It is currently being suggested as a replacement for what we have in the
+@i{White Rabbit} system, because the way it is there is not portable
+(assembly code and knowledge of the ABI is required for each
+platform).  Nonetheless, I borrowed quite some ideas from the
+implementation by Tomasz Wlostowski, who must definitely be
+considered co-author and my inspiring muse.
+
 @menu
+* Basic Ideas::                 
+* The Main Data Structure::     
+* The Client::                  
+* The Server::                  
+* Diagnostics::                 
+* The Communication Protocol::  
 * Examples::                    
+* Bugs::                        
 @end menu
+
+@c ##########################################################################
+@node Basic Ideas
+@chapter Basic Ideas
+
+The package is meant to be as simple as possible, while still having
+some abstraction to be useable on different environments than the
+@i{White Rabbit Switch}.  There are other RPC environments, but they are
+usually oversized for our needs. Besides, I personally love small
+things that I can use as completely-understandable examples when
+teaching.
+
+With this library, a process can be a server, or a client, or both.
+A server program opens a Unix domain socket (or other communication channels)
+and then accepts client programs. Thus,
+performing a server action means either accepting a new client or
+performing a client request.  To avoid requiring the library
+to be the only I/O of the process, I export the @i{fd_set} structure
+that lists the file descriptors that are active in the server (I don't directly
+support @code{poll(2)}, only @code{select(2)}).
+
+A client program only works on a single file descriptor, so the library
+provides a function to retrieve the fd (thus you can use poll yourself).
+
+A function being exported is defined by a data structure, which lists both
+the argument list and the return value.  Data types supported are
+integers, double-precision floating point numbers,
+strings and generic structures.  We might (or might
+not) export the thing over TCP and add endian conversion, but at this
+point the data type is really just informative.
+
+An argument list is described by a zero-terminated array of 32-bit
+integers, which specifies both the type and the size of the argument
+being passed.  The return value is described by a single 32-bit
+integer specifying type and size.  The @code{minipc.h} header provides
+macros to build the actual values.
+
+
+@c ##########################################################################
+@node The Main Data Structure
+@chapter The Main Data Structure
+
+In order to communicate, client and server must agree on the functions
+being called remotely.  In the library, a function is identified by a
+string name, 18 bytes at most.
+
+Following is the "procedure definition" structure, from @code{minipc.h}.
+Its length (on 32-bit machines) is 36 bytes if the function takes
+no arguments, each argument is described by 4 more bytes.
+
+@example
+   struct minipc_pd {
+           minipc_f *f;        /* pointer to the function */
+           char name[20];      /* name of the function */
+           uint32_t flags;
+           uint32_t retval;    /* type of return value */
+           uint32_t args[];    /* null-terminated list of arguments */
+   };
+@end example
+
+Client and server are expected to share such data structure, or at least
+the macros used to build the data structure. The fields
+@i{name}, @i{retval} and @i{args}, must match. The function pointer
+is only used in the server. No
+user-accessible flags are currently there.
+
+The "args" array must be terminated by a "MINIPC_ARG_END" value, which
+is guaranteed to be bitwise zero. The other arguments encode type and
+size, even if some types (like integers, floats) always have the same
+size. The header offers the following macros to encode and decode
+the arguments (and retval). Please look at the examples to better
+get the feeling of the code.
+
+@table @code
+@item MINIPC_ARG_ENCODE(atype, type)
+
+	The macro returns a 32-bit integer that includes the argument
+        type (see below for a list of @i{atypes}) and the size of @i{type}
+        (using @code{sizeof} internally).  The size must be 64kB at most.
+
+@item MINIPC_GET_ATYPE(word)
+@itemx MINIPC_GET_ASIZE(word)
+
+	The functions return the type and size of an argument.
+
+@item MINIPC_ARG_END
+
+	This is zero, the terminator for the argument list.
+
+@end table
+
+The supported types are the values of this enumeration (the error
+special type is used internally by the library):
+
+@example
+   enum minipc_at {
+           MINIPC_ATYPE_ERROR = 0xffff,
+           MINIPC_ATYPE_NONE = 0,  /* used as terminator */
+           MINIPC_ATYPE_INT = 1,
+           MINIPC_ATYPE_INT64,
+           MINIPC_ATYPE_DOUBLE,    /* float is promoted to double */
+           MINIPC_ATYPE_STRING,    /* size  is strlen() each time */
+           MINIPC_ATYPE_STRUCT
+   };
+@end example
+
+@c ##########################################################################
+@node The Client
+@chapter The Client
+
+A process acting as a @i{minipc} client creates a client channel. The
+@code{minipc_ch} structure includes a file descriptor that you can
+retrieve. The following functions are thus available:
+
+@example
+   struct minipc_ch *minipc_client_create(const char *name, int flags);
+   int minipc_fileno(struct minipc_ch *ch);
+@end example
+
+The name used to create a channel is a filename including no
+path separators and no colon (@code{:}) character.
+
+The library currently only supports Unix domain sockets, and the
+filename is used to connect to a socket in the @code{MINIPC_BASE_PATH}
+directory (default value: @code{/tmp/.minipc}). Other channels will
+use colon-separated names, for example @code{TCP:@i{host}:@i{port}}
+for TCP channels.
+
+With the fileno a client may poll for reading, although this is not
+usually needed because the server will only send reply packets:
+exactly one reply packet for each request packet.
+
+A client can make a request by calling this function:
+
+@example
+   int minipc_call(struct minipc_ch *ch, int millisec_timeout,
+                   const struct minipc_pd *pd, void *ret, ...);
+@end example
+
+The arguments are passed as a list of values (structures and strings
+are passed by pointer); the return pointer is filled with the returned
+data item (please look at the examples for actual use patterns).
+
+The @code{minipc_call} function picks data from the variable arguments
+according to the argument types set forth in the "pd" procedure
+definition.  Similarly, the return value is stored where pointed by
+ret, according to pd->retval.  Note that the return value must be at least
+4 bytes long.
+
+The @code{minipc_call} returns 0 on success and -1 on failure, setting
+@code{errno} accordingly..  If @i{send}, @i{poll} or @i{recv} return
+an error, the original @code{errno} is preserved.  If @i{poll} times
+out (using the provided timeout) @code{errno} is set to
+@code{ETIMEDOUT}.  If the server returns an error (using
+@code{MINIPC_ATYPE_ERROR}), the local errno is set to @code{EREMOTEIO}
+and the remote one is saved using the retval pointer (which is
+guaranteer to point to an int-sized or bigger area).
+
+To close the connection, a client can call
+
+@example
+   int minipc_close(struct minipc_ch *ch);
+@end example
+
+@c ##########################################################################
+@node The Server
+@chapter The Server
+
+The server must open a server channel and process requests as needed.
+The library exports the following functions for server use:
+
+@example
+   struct minipc_ch *minipc_server_create(const char *name, int flags);
+
+   int minipc_export(struct minipc_ch *ch, const struct minipc_pd *pd);
+   int minipc_unexport(struct minipc_ch *ch, const struct minipc_pd *pd);
+
+   int minipc_server_action(struct minipc_ch *ch, int timeoutms);
+
+   int minipc_server_get_fdset(struct minipc_ch *ch, fd_set *setptr);
+@end example
+
+The @i{export} and @i{unexport} functions should be self-explicative. Note
+that the exported function name is part of the @code{pd} structure.
+The @code{pd} passed to @i{minipc_unexport} must be the
+same as the one passed to @i{minipc_export}, not just a pointer to a
+data structure with the same contents.
+
+The function @i{minipc_server_action} either accepts a new client or
+handles all pending client requests.  For every packet received from a
+client, the function send back a reply packet.  So, even if communication is
+based on @code{SOCK_STREAM}, packet boundaries are preserved by using only
+synchronous communication.
+
+The @i{minipc_get_fdset} function returns an @i{fdset} structure, so the caller
+may use select() in the main loop by augmenting the minipc @i{fdset}
+with its own.
+
+Internally, the server action calls @i{poll} by itself (with the
+specified timeout). Thus, if you already used @i{select} you can pass
+0 as @code{timeoutms} in minipc_server_action.
+
+The header uses a @code{typedef} for exported functions, to ease their
+definition:
+
+@example
+   typedef int (minipc_f)(const struct minipc_pd *,
+                          void *retval, void *args);
+@end example
+
+An exported function receives a pointer to its own description, a
+pointer to the data being returned  and a pointer to
+the unmarshalled arguments (again, please look at the examples)
+
+The function itself should pick up data from the pointers. Such
+pointers are usually directed to the packet buffer, so you should not
+change the arguments themselves before calling the real function with
+the ABI of the current CPU.
+
+For example, the code exporting @code{sqrt} looks like the following:
+
+@example
+   extern double sqrt(double x);
+
+   int export_sqrt(const struct minipc_pd *pd, uint32_t *args, void *ret)
+   {
+           double in, out;
+
+           in = *(double *)args;
+           out = sqrt(in);
+           *(double *)retval = out;
+           return 0;
+    }
+
+    struct minipc_pd sqrt_pd = {
+            .f = export_sqrt,
+            .id.s = "sqrt",
+            .retval = MINIPC_ARG_ENCODE(MINIPC_AT_DOUBLE, double),
+            .args = {
+                    MINIPC_ARG_ENCODE(MINIPC_AT_DOUBLE, double),
+                    MINIPC_ARG_END,
+            },
+   }
+@end example
+
+Please note that while using doubles or integers is easy, unmarshalling
+a string from the args array is not trivial. The library
+offers a generic unmarshall function:
+
+@example
+    uint32_t *minipc_get_next_arg(uint32_t arg[], uint32_t atype);
+@end example
+
+The function receives the current pointer to an argument and the
+current type.  The function offers a portable solution to the
+problem of strings or structure whose size is not a multiple of
+4 bytes.
+
+This is an example use of the function:
+
+@example
+   int export_strcat(const struct minipc_pd *pd, uint32_t *args, void *ret)
+   {
+           char *s1, char *s2, char sout[256];
+
+           s1 = (char *)args;
+           args = minipc_get_next_arg(args, pd->args[0]);
+           s2 = (char *)args;
+
+           strncpy(sout, s1, sizeof(sout));
+           strncat(sout, s2, sizeof(sout) - strlen(sout));
+           strncpy(ret, sout, MINIPC_MAX_REPLY));
+           return 0;
+   }
+@end example
+
+The client that calls a server exporting @i{sqrt} (as shown above)
+will do it in the following way. The code assumes
+@code{struct minipc_ch *client} and @code{struct minipc_pd pd_sqrt}
+are valid variables:
+
+@example
+   double operand;
+   double result;
+   int error;
+
+   error = minipc_call(client, &pd_sqrt, &result, operand);
+   if (error < 0) { ... }
+@end example
+
+@c ##########################################################################
+@node Diagnostics
+@chapter Diagnostics
+
+A @code{minipc_ch} channel may have an associated log file (you can
+use stderr or whatever). This following function sets the log file:
+
+@example
+   int minipc_set_logfile(struct minipc_ch *ch, FILE *logf);
+@end example
+
+You can set the logfile to NULL (default at channel creation) if you
+want to stop sending diagnostics. The function does not open or close
+the file, as otherwise it wouldn't be possible to use stderr, so if
+you want to open a log file on disk, it's your duty to do so; in this
+case you possibly want to make it unbuffered, since the library only
+calls @i{fprintf} on it, with no explicit @i{fflush}.
+
+@c ##########################################################################
+@node The Communication Protocol
+@chapter The Communication Protocol
+
+The protocol itself is an internal detail, but worth knowing in case a
+bug is discovered. Relevant structures are defined in the internal header
+@code{minipc-int.h}.
+
+Request packets are sent as @code{struct mpc_req_packet}, which
+includes the following items:
+
+@itemize @bullet
+@item 20 bytes for the function name, copied from "pd" structure
+@item an array of 32-bit integers for the arguments.
+@end itemize
+
+Each argument passed to the remote function is stored into one or
+more such 32-bit integers, in host byte order. Note that the
+actual size of the argument is written in the "pd" args list.
+Marshalling is performed by minipc_call() with @i{varargs} evaluation.
+
+Reply packets are sent as @code{struct mpc_rep_packet}", which has two fields:
+
+@itemize @bullet
+@item @code{uint32_t type}
+@item @code{uint8_t val[]}
+@end itemize
+
+The type is checked to be the same as what is defined as "ret" in the
+@code{pd} structure. The @code{val} array is a plain byte array that
+is copied to the @code{ret} pointer passed to minipc_call (like
+@i{result} in the sqrt example above). When @code{type} is an error
+value (i.e. @code{MINIPC_ATYPE_ERROR}) the payload is a 4-byte errno
+value.  Note that @code{type} is not passed back to the caller of
+@i{minipc_call}, because errors are identified by a negative return value.
 
 @c ##########################################################################
 @node Examples
 @chapter Examples
 
+The subdirectory @code{examples/} hosts a number of examples, that
+are logically divided in groups.
 
+@menu
+* Trivial Example::             
+* Pty-based Example::           
+* A Bridge to Shared Memory::   
+@end menu
+
+@c ==========================================================================
+@node Trivial Example
+@section Trivial Example
+
+The two programs in this group are called @code{trivial-server} and
+@code{trivial-client}. 
+
+The server exports three functions:
+
+@table @i
+@item sum
+The function receives two integers and returns another integer value.
+
+@item gettimeofday
+The function receives nothing and returns @code{struct timeval}.
+
+@item sqrt
+The functions receives one @code{double} number and returns another.
+@end table
+
+The server program shows how the @code{minipc_pd} structures are built
+and how the @o{minipc_f} function is implemented.  For each exported
+function, the source file includes first the non-rpc-aware function
+and then the mini-ipc wrapper.
+
+In this case the main loop of the server just calls the server action,
+without doing anything else. It is verbose in its own, and
+declares @i{stderr} as @code{logfile} for the library.
+
+The client declares the same @code{minipc_pd} structures as the server.
+In more serious uses you should define the structure in a separate
+source file, in order to share them in the server and client.
+The client just calls the server functions a few times, delaying
+half a second in between.
+
+The following commands, run in two different terminal sessions,
+can be used to test the pair of programs:
+
+@example
+    ./trivial-server
+
+    for n in $(seq 1 20); do
+        ./trivial-client &
+	 sleep 0.2
+    done
+@end example
+
+@c ==========================================================================
+@node Pty-based Example
+@section Pty-based Example
+
+This set of programs sets up a more complete example.  It shows how to
+multiplex RPC operations and other activities by using th RPC @i{fd_set}
+together with your own channels. The programs are called @code{pty-server}
+and @code{pty-client}.
+
+The server creates a pseudo-tty device and spawn a shell running in it.
+If then feeds its own @i{stdin} to the shell and the shell's @i{stdout} to
+its own @i{stdout}.  You should call it with no arguments. Its log file
+is called @code{/tmp/pty-server.XXXXXX}, with @code{XXXXXX} replaced
+by some unique string by the @i{mkstemp} library function.
+
+The RPC client can make queries to this server, without disturbing the
+operation of the underlying shell.  The client can ask for the
+statistics of bytes read/written to/from the @i{pty} device; it can
+read or write environment variables in the @code{pty-server}
+application; it can feed strings to the shell driven by the pty
+server; it can run strlen and strcat remotely, as well as remotely run
+the stat system call (to check string and structure exchange).  Each
+@code{pty-client} run takes a commandline, like the following ones
+(names in angle-brackets are placeholders):
+
+@example
+   ./pty-client count
+   ./pty-client getenv <name>
+   ./pty-client setenv <name> <value>
+   ./pty-client feed <shell-command>
+   ./pty-client strlen <string>
+   ./pty-client strcat <string> <string>
+   ./pty-client stat <filename>
+@end example
+
+The commands @code{count}, @code{feed}, @code{strlen}, @code{strcat}
+and @code{stat} can be verified by just inspecting their own output. The
+commands @code{setenv} and @code{getenv} may cross-verified.
+
+Note that only one pty-server can be running at a time (as the rpc
+socket is a static name within the socket directory), but you can run
+several clients at the same time.
+
+The sharing of @code{minipc_pd} (procedure description) in this set of
+example is accomplished by linking the same object file in both
+programs, to avoid code duplication.
+
+@c ==========================================================================
+@node A Bridge to Shared Memory
+@section A Bridge to Shared Memory
+
+This set of examples shows how to write a @i{bridge} from @i{mini-ipc}
+to other communications media.  Moreover, it shows how a single
+process can act both as a client and a server.
+
+The example example shows how to route @i{mini-ipc} requests to
+another process through shared memory.  Sure there is no real interest
+in shared memory for IPC calls, but the same approach can be used with
+mailbox-kind communication mechanisms to talk with hardware; for
+example a CPU without OS running on an FPGA.
+
+This example-set is made up of three programs:
+
+@table @code
+@item mbox-bridge
+	The process acts as both a server and a client of the @i{mini-ipc}
+        protocol, routing requests to and from a shared-memory mailbox.
+        As @i{mini-ipc} client, it requests the current time to
+	@code{trivial-server} (such queries are originated from the shared
+        memory area).  As @i{mini-ipc} server, it replies to
+        @i{stat} calls for local filenames (and such service is asked
+        to another process through the shared memory).
+
+@item mbox-process
+	The "remote" process. It only communicating though
+        the mailbox device.  It asks for the current time once a
+        second and can serve @i{stat} requests when they happen.
+
+@item mbox-client
+	A program that reads @i{stdin} forever, asking a @i{stat}
+        system call for every line it reads (such @i{stat} is asked
+        to @code{mbox-bridge} using @i{mini-ipc}.
+@end table
+
+To demonstrate the mechanism, you'll need to run @code{trivial-server}
+(which answers @i{timeofday} queries), @code{mbox-bridge} (to bridge
+requests), @code{mbox-process} and one or more @code{mbox-client}
+processes.
+
+The following is an example out output generated by @code{mbox-bridge}
+(which passes @i{gettimeofday} requests silently as a @i{mini-ipc}
+client, but uses @i{mini-ipc} verbose logging to @i{stderr} as a server).
+The server in the fragment below is being contacted by several clients,
+some of which close the connection:
+
+@example
+    minipc_export: exported 0x8a3d228 (stat) with pd 0x804a1a0
+                    -- retval 00050058, args 00040004...
+    mpc_handle_connection: accept returned fd 5 (error 0)
+    mpc_handle_client: request for stat
+    mpc_handle_client: request for stat
+    mpc_handle_client: request for stat
+    mpc_handle_client: error 0 in fd 5, closing
+    mpc_handle_connection: accept returned fd 5 (error 0)
+    mpc_handle_client: request for stat
+    mpc_handle_client: request for stat
+    mpc_handle_client: error 0 in fd 5, closing
+    mpc_handle_connection: accept returned fd 5 (error 0)
+    mpc_handle_connection: accept returned fd 6 (error 0)
+    mpc_handle_client: request for stat
+    mpc_handle_client: error 0 in fd 6, closing
+@end example
+
+The following fragment shows the output of an @code{mbox-process},
+which reports all actions (it asks the time and serves @i{stat}
+queries):
+
+@example
+   time: 1326231447.212400
+   time: 1326231448.218001
+   time: 1326231449.233714
+   Serving stat(/home/rubini)
+   time: 1326231450.240125
+@end example
+
+Finally, the following fragment shows the input line (first line)
+and output lines reported by one invocation of @code{mbox-client}:
+
+@example
+   /home/rubini
+   minipc_call: calling "stat"
+   /home/rubini:
+   mode 40755, size 32768, owner 410, atime 1326230999
+@end example
+
+@c ##########################################################################
+@node Bugs
+@chapter Bugs
+
+Please note that there are a number of untested corner cases as I write this.
+There are no known bugs, but the following points at least may be
+problematic as I didn't thoroughly test the code for them:
+
+@itemize @bullet
+
+@item Please don't try going near 1k argument/retval size
+(@code{MINIPC_MAX_REPLY}: off-by-1 errors are most likely present (and
+I have no tests yet to feel safe).
+
+@item Strings passing may have some hidden bugs.
+
+@item Struct passing may be faulty in some corner cases.
+@end itemize
 
 @c ##########################################################################
 @bye
 
-
 @c  LocalWords:  gnudd titlepage iftex texinfo CERN documentlanguage settitle
-@c  LocalWords:  documentencoding setfilename afourpaper paragraphindent
-@c  LocalWords:  setchapternewpage finalout
+@c  LocalWords:  documentencoding setfilename afourpaper paragraphindent Tomasz
+@c  LocalWords:  setchapternewpage finalout Wlostowski minipc struct uint ATYPE
+@c  LocalWords:  retval enum strlen atype ASIZE args atypes sizeof const fileno
+@c  LocalWords:  millisec errno recv ETIMEDOUT EREMOTEIO unexport timeoutms
+@c  LocalWords:  fdset setptr endian itemx logf stderr logfile fprintf fflush
+@c  LocalWords:  varargs unmarshalled unmarshalling unmarshall gettimeofday
+@c  LocalWords:  timeval FPGA stat timeofday
