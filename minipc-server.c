@@ -104,28 +104,37 @@ uint32_t *minipc_get_next_arg(uint32_t arg[], uint32_t atype)
  */
 static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 {
-	struct mpc_req_packet pkt_in;
-	struct mpc_rep_packet pkt_out;
+	struct mpc_req_packet *p_in, _pkt_in;
+	struct mpc_rep_packet *p_out, _pkt_out;
 	const struct minipc_pd *pd;
 	struct mpc_flist *flist;
 	int i;
 
-	i = recv(fd, &pkt_in, sizeof(pkt_in), 0);
+	if (link->memaddr) {
+		struct mpc_shmem *shm = link->memaddr;
+		p_in = &shm->request;
+		p_out = &shm->reply;
+	} else {
+		p_in = & _pkt_in;
+		p_out = & _pkt_out;
+	}
+
+	i = recv(fd, p_in, sizeof(*p_in), 0);
 	if (i < 0 && errno == EINTR)
 		 return;
 	if (i <= 0)
 		goto close_client;
 
-	/* use pkt_in.name to look for the function */
+	/* use p_in->name to look for the function */
 	for (flist = link->flist; flist; flist = flist->next)
-		if (!(strcmp(pkt_in.name, flist->pd->name)))
+		if (!(strcmp(p_in->name, flist->pd->name)))
 			break;
 	if (!flist) {
 		if (link->logf)
 			fprintf(link->logf, "%s: function %s not found\n",
-				__func__, pkt_in.name);
-		pkt_out.type = MINIPC_ARG_ENCODE(MINIPC_ATYPE_ERROR, int);
-		*(int *)(&pkt_out.val) = EOPNOTSUPP;
+				__func__, p_in->name);
+		p_out->type = MINIPC_ARG_ENCODE(MINIPC_ATYPE_ERROR, int);
+		*(int *)(&p_out->val) = EOPNOTSUPP;
 		goto send_reply;
 	}
 	pd = flist->pd;
@@ -134,27 +143,27 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 			__func__, pd->name);
 
 	/* call the function and send back stuff */
-	i = pd->f(pd, pkt_in.args, pkt_out.val);
+	i = pd->f(pd, p_in->args, p_out->val);
 	if (i < 0) {
-		pkt_out.type = MINIPC_ARG_ENCODE(MINIPC_ATYPE_ERROR, int);
-		*(int *)(&pkt_out.val) = errno;
+		p_out->type = MINIPC_ARG_ENCODE(MINIPC_ATYPE_ERROR, int);
+		*(int *)(&p_out->val) = errno;
 	} else {
 		/* Use retval, but fix the length for strings */
 		if (MINIPC_GET_ATYPE(pd->retval) == MINIPC_ATYPE_STRING) {
-			int size = strlen((char *)pkt_out.val) + 1;
+			int size = strlen((char *)p_out->val) + 1;
 
 			size = (size + 3) & ~3; /* align */
-			pkt_out.type =
+			p_out->type =
 				__MINIPC_ARG_ENCODE(MINIPC_ATYPE_STRING, size);
 		} else {
-			pkt_out.type = pd->retval;
+			p_out->type = pd->retval;
 		}
 	}
 
  send_reply:
 	/* send a 32-bit value plus the declared return length */
-	if (send(fd, &pkt_out, sizeof(pkt_out.type)
-	     + MINIPC_GET_ASIZE(pkt_out.type), MSG_NOSIGNAL) < 0)
+	if (send(fd, p_out, sizeof(p_out->type)
+	     + MINIPC_GET_ASIZE(p_out->type), MSG_NOSIGNAL) < 0)
 		goto close_client;
 	return;
 
