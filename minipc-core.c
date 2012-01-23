@@ -13,15 +13,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/mman.h>
+#include <sys/shm.h>
 
 #include "minipc-int.h"
 
 struct mpc_link *__mpc_base;
+
+static int __mpc_poll_usec = MINIPC_DEFAULT_POLL;
 
 void mpc_free_flist(struct mpc_link *link, struct mpc_flist *flist)
 {
@@ -72,6 +78,18 @@ int minipc_close(struct minipc_ch *ch)
 		mpc_free_flist(link, link->flist);
 	free(link);
 	return 0;
+}
+
+int minipc_set_poll(int usec)
+{
+	int ret = __mpc_poll_usec;
+
+	if (usec <= 0) {
+		errno = EINVAL;
+		return -1;
+	}
+	__mpc_poll_usec = usec;
+	return ret;
 }
 
 int minipc_set_logfile(struct minipc_ch *ch, FILE *logf)

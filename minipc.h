@@ -25,6 +25,9 @@
 /* The base pathname, mkdir is performed as needed */
 #define MINIPC_BASE_PATH "/tmp/.minipc"
 
+/* Default polling interval for memory-based channels */
+#define MINIPC_DEFAULT_POLL  (10*1000)
+
 /* Argument type (and retval type). The size is encoded in the same word */
 enum minipc_at {
 	MINIPC_ATYPE_ERROR = 0xffff,
@@ -67,6 +70,9 @@ static inline int minipc_fileno(struct minipc_ch *ch) {return ch->fd;}
 struct minipc_ch *minipc_server_create(const char *name, int flags);
 struct minipc_ch *minipc_client_create(const char *name, int flags);
 int minipc_close(struct minipc_ch *ch);
+
+/* Generic: set the default polling interval for mem-based channels */
+int minipc_set_poll(int usec);
 
 /* Generic: attach diagnostics to a log file */
 int minipc_set_logfile(struct minipc_ch *ch, FILE *logf);
