@@ -34,17 +34,26 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 	int i, narg, size, retsize, pollnr;
 	int atype, asize;
 	va_list ap;
-	struct mpc_req_packet pkt_out = {"",};
-	struct mpc_rep_packet pkt_in;
+	struct mpc_req_packet *p_out, _pkt_out = {"",};
+	struct mpc_rep_packet *p_in, _pkt_in;
 
 	CHECK_LINK(link);
+
+	if (link->memaddr) {
+		struct mpc_shmem *shm = link->memaddr;
+		p_out = &shm->request;
+		p_in = &shm->reply;
+	} else {
+		p_out = & _pkt_out;
+		p_in = & _pkt_in;
+	}
 
 	/* Build the packet to send out -- marshall args */
 	if (link->logf) {
 		fprintf(link->logf, "%s: calling \"%s\"\n",
 			__func__, pd->name);
 	}
-	strcpy(pkt_out.name, pd->name);
+	strcpy(p_out->name, pd->name);
 
 	va_start(ap, ret);
 	for (i = narg = 0; ; i++) {
@@ -60,21 +69,21 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		case MINIPC_ATYPE_NONE:
 			goto out; /* end of list */
 		case MINIPC_ATYPE_INT:
-			pkt_out.args[narg++] = va_arg(ap, int);
+			p_out->args[narg++] = va_arg(ap, int);
 			break;
 		case MINIPC_ATYPE_INT64:
-			*(uint64_t *)(pkt_out.args + narg)
+			*(uint64_t *)(p_out->args + narg)
 				= va_arg(ap, uint64_t);
 			narg = next_narg;
 			break;
 		case MINIPC_ATYPE_DOUBLE:
-			*(double *)(pkt_out.args + narg) = va_arg(ap, double);
+			*(double *)(p_out->args + narg) = va_arg(ap, double);
 			narg = next_narg;
 			break;
 		case MINIPC_ATYPE_STRING:
 		{
 			char *sin = va_arg(ap, void *);
-			char *sout = (void *)(pkt_out.args + narg);
+			char *sout = (void *)(p_out->args + narg);
 			int slen = strlen(sin);
 			int alen;
 
@@ -90,7 +99,7 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 			break;
 		}
 		case MINIPC_ATYPE_STRUCT:
-			memcpy(pkt_out.args + narg, va_arg(ap, void *), asize);
+			memcpy(p_out->args + narg, va_arg(ap, void *), asize);
 			narg = next_narg;
 			break;
 
@@ -106,8 +115,8 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
  out:
 	va_end(ap);
 
-	size = sizeof(pkt_out.name) + sizeof(pkt_out.args[0]) * narg;
-	if (send(ch->fd, &pkt_out, size, 0) < 0) {
+	size = sizeof(p_out->name) + sizeof(p_out->args[0]) * narg;
+	if (send(ch->fd, p_out, size, 0) < 0) {
 		/* errno already set */
 		return -1;
 	}
@@ -127,14 +136,14 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 	}
 	/* this "size" is wrong for strings, so recv the max packet size */
 	size = MINIPC_GET_ASIZE(pd->retval) + sizeof(uint32_t);
-	retsize = recv(ch->fd, &pkt_in, sizeof(pkt_in), 0);
+	retsize = recv(ch->fd, p_in, sizeof(*p_in), 0);
 
 	/* if very short, we have a problem */
-	if (retsize < (sizeof(pkt_in.type)) + sizeof(int))
+	if (retsize < (sizeof(p_in->type)) + sizeof(int))
 		goto too_short;
 	/* remote error reported */
-	if (MINIPC_GET_ATYPE(pkt_in.type) == MINIPC_ATYPE_ERROR) {
-		int remoteerr = *(int *)&pkt_in.val;
+	if (MINIPC_GET_ATYPE(p_in->type) == MINIPC_ATYPE_ERROR) {
+		int remoteerr = *(int *)&p_in->val;
 
 		if (link->logf) {
 			fprintf(link->logf, "%s: remote error \"%s\"\n",
@@ -145,10 +154,10 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		return -1;
 	}
 	/* another check: the return type must match */
-	if (MINIPC_GET_ATYPE(pkt_in.type) != MINIPC_GET_ATYPE(pd->retval)) {
+	if (MINIPC_GET_ATYPE(p_in->type) != MINIPC_GET_ATYPE(pd->retval)) {
 		if (link->logf) {
 			fprintf(link->logf, "%s: wrong code %08x (not %08x)\n",
-				__func__, pkt_in.type, pd->retval);
+				__func__, p_in->type, pd->retval);
 		}
 		errno = EPROTO;
 		return -1;
@@ -157,7 +166,7 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 	if (retsize < size)
 		goto too_short;
 	/* all good */
-	memcpy(ret, &pkt_in.val, MINIPC_GET_ASIZE(pkt_in.type));
+	memcpy(ret, &p_in->val, MINIPC_GET_ASIZE(p_in->type));
 	return 0;
 
 too_short:
