@@ -47,11 +47,14 @@ struct mpc_flist {
 struct mpc_link {
 	struct minipc_ch ch;
 	int magic;
+	int pid;
 	int flags;
 	struct mpc_link *nextl;
 	struct mpc_flist *flist;
 	FILE *logf;
 	struct sockaddr_un addr;
+	void *memaddr;
+	int memsize;
 	char name[MINIPC_MAX_NAME];
 	int fd[MINIPC_MAX_CLIENTS];
 	fd_set fdset;
@@ -60,6 +63,8 @@ struct mpc_link {
 
 #define MPC_FLAG_SERVER		0x00010000
 #define MPC_FLAG_CLIENT		0x00020000
+#define MPC_FLAG_SHMEM		0x00040000
+#define MPC_FLAG_DEVMEM		0x00080000
 #define MPC_USER_FLAGS(x)	((x) & 0xffff)
 
 /* The request packet being transferred */
@@ -71,6 +76,14 @@ struct mpc_req_packet {
 struct mpc_rep_packet {
 	uint32_t type;
 	uint8_t val[MINIPC_MAX_REPLY];
+};
+
+/* A structure for shared memory (takes more than 2kB) */
+struct mpc_shmem {
+	uint32_t	nrequest;	/* incremented at each request */
+	uint32_t	nreply;		/* incremented at each reply */
+	struct mpc_req_packet	request;
+	struct mpc_rep_packet	reply;
 };
 
 #define MPC_TIMEOUT		1000 /* msec, hardwired */
