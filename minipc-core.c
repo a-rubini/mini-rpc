@@ -73,6 +73,13 @@ int minipc_close(struct minipc_ch *ch)
 			__func__, link, link->ch.fd);
 	}
 	close(ch->fd);
+	if (link->pid)
+		kill(link->pid, SIGINT);
+	if (link->flags & MPC_FLAG_SHMEM)
+		shmdt(link->memaddr);
+	if (link->flags & MPC_FLAG_DEVMEM)
+		munmap(link->memaddr, link->memsize);
+
 	/* Release allocated functions */
 	while (link->flist)
 		mpc_free_flist(link, link->flist);
@@ -102,6 +109,100 @@ int minipc_set_logfile(struct minipc_ch *ch, FILE *logf)
 	return 0;
 }
 
+/* the child for memory-based channels just polls */
+void __minipc_child(void *addr, int fd, int flags)
+{
+	int i;
+	uint32_t prev, *vptr;
+	struct mpc_shmem *shm = addr;
+
+	for (i = 0; i < 256; i++)
+		if (i != fd) close(i);
+
+	/* the process must only send one byte when the value changes */
+	if (flags & MPC_FLAG_SERVER)
+		vptr = &shm->nrequest;
+	else
+		vptr = &shm->nreply;
+
+	prev = *vptr;
+
+	while (1) {
+		if (*vptr != prev) {
+			write(fd, "", 1);
+			prev++;
+		}
+		usleep(__mpc_poll_usec);
+	}
+}
+
+/* helper function for memory-based channels */
+static struct mpc_link *__minipc_memlink_create(struct mpc_link *link)
+{
+	void *addr;
+	long offset;
+	int memsize, pid, ret;
+	int pagesize = getpagesize();
+	int pfd[2];
+
+	memsize = (sizeof(struct mpc_shmem) + pagesize - 1) & ~pagesize;
+
+	/* Warning: no check for trailing garbage in name */
+	if (sscanf(link->name, "shm:%li", &offset)) {
+		ret = shmget(offset, memsize, IPC_CREAT | 0666);
+		if (ret < 0)
+			return NULL;
+		addr = shmat(ret, NULL, SHM_RND);
+		if (addr == (void *)-1)
+			return NULL;
+		link->flags |= MPC_FLAG_SHMEM;
+	}
+
+	/* Warning: no check for trailing garbage in name */
+	if (sscanf(link->name, "mem:%li", &offset)) {
+		int fd = open("/dev/mem", O_RDWR | O_SYNC);
+
+		if (fd < 0)
+			return NULL;
+		addr = mmap(0, memsize, PROT_READ | PROT_WRITE, MAP_SHARED,
+			    fd, offset);
+		close(fd);
+		if (addr == (MAP_FAILED))
+			return NULL;
+		link->flags |= MPC_FLAG_DEVMEM;
+	}
+	link->memaddr = addr;
+	link->memsize = memsize;
+	if (link->flags & MPC_FLAG_SERVER)
+		memset(addr, 0, sizeof(struct mpc_shmem));
+
+	/* fork a polling process */
+	if (pipe(pfd) < 0)
+		goto err_unmap;
+	switch ( (pid = fork()) ) {
+	case 0: /* child */
+		close(pfd[0]);
+		__minipc_child(addr, pfd[1], link->flags);
+		exit(1);
+	default: /* father */
+		close(pfd[1]);
+		link->ch.fd = pfd[0];
+		link->pid = pid;
+		return link;
+	case -1:
+		break; /* error... */
+	}
+	close(pfd[0]);
+	close(pfd[1]);
+ err_unmap:
+	if (link->flags & MPC_FLAG_SHMEM)
+		shmdt(link->memaddr);
+	if (link->flags & MPC_FLAG_DEVMEM)
+		munmap(link->memaddr, link->memsize);
+	return NULL;
+
+}
+
 /* create a link, either server or client */
 struct minipc_ch *__minipc_link_create(const char *name, int flags)
 {
@@ -115,6 +216,12 @@ struct minipc_ch *__minipc_link_create(const char *name, int flags)
 	link->flags = flags;
 	strncpy(link->name, name, sizeof(link->name) -1);
 
+	/* special-case the memory-based channels */
+	if (!strncmp(name, "shm:", 4) || !strncmp(name, "mem:", 4)) {
+		if (!__minipc_memlink_create(link))
+			goto out_free;
+		goto out_success;
+	}
 	/* now create the socket and prepare the service */
 	fd = socket(SOCK_STREAM, AF_UNIX, 0);
 	if(fd < 0)
@@ -144,6 +251,7 @@ struct minipc_ch *__minipc_link_create(const char *name, int flags)
 	}
 
 	/* success: link to the list and return */
+ out_success:
 	link->addr = sun;
 	next = __mpc_base;
 	link->nextl = __mpc_base;
