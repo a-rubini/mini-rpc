@@ -119,6 +119,9 @@ void __minipc_child(void *addr, int fd, int flags)
 	for (i = 0; i < 256; i++)
 		if (i != fd) close(i);
 
+	/* check the parent: if it changes, then we exit */
+	i = getppid();
+
 	/* the process must only send one byte when the value changes */
 	if (flags & MPC_FLAG_SERVER)
 		vptr = &shm->nrequest;
@@ -132,6 +135,8 @@ void __minipc_child(void *addr, int fd, int flags)
 			write(fd, "", 1);
 			prev++;
 		}
+		if (getppid() != i)
+			exit(0);
 		usleep(__mpc_poll_usec);
 	}
 }
