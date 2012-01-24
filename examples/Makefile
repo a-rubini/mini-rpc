@@ -17,6 +17,7 @@ LDFLAGS = -L.. -lminipc -lm
 PROGS = trivial-server trivial-client
 PROGS += pty-server pty-client
 PROGS += mbox-process mbox-bridge mbox-client
+PROGS += shmem-server shmem-client
 
 all: $(PROGS)
 
@@ -28,6 +29,12 @@ pty-server: pty-server.o pty-rpc_server.o pty-rpc_structs.o
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -lutil -o $@
 
 pty-client: pty-client.o pty-rpc_structs.o
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+
+shmem-server: shmem-server.o shmem-structs.o
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+
+shmem-client: shmem-client.o shmem-structs.o
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
 

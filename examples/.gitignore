@@ -5,3 +5,6 @@ pty-client
 mbox-bridge
 mbox-client
 mbox-process
+shmem-server
+shmem-client
+
