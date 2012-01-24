@@ -30,6 +30,7 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		const struct minipc_pd *pd, void *ret, ...)
 {
 	struct mpc_link *link = mpc_get_link(ch);
+	struct mpc_shmem *shm = link->memaddr;
 	struct pollfd pfd;
 	int i, narg, size, retsize, pollnr;
 	int atype, asize;
@@ -39,8 +40,7 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 
 	CHECK_LINK(link);
 
-	if (link->memaddr) {
-		struct mpc_shmem *shm = link->memaddr;
+	if (shm) {
 		p_out = &shm->request;
 		p_in = &shm->reply;
 	} else {
@@ -115,13 +115,17 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
  out:
 	va_end(ap);
 
-	size = sizeof(p_out->name) + sizeof(p_out->args[0]) * narg;
-	if (send(ch->fd, p_out, size, 0) < 0) {
-		/* errno already set */
-		return -1;
+	if (shm) {
+		shm->nrequest++;
+	} else {
+		size = sizeof(p_out->name) + sizeof(p_out->args[0]) * narg;
+		if (send(ch->fd, p_out, size, 0) < 0) {
+			/* errno already set */
+			return -1;
+		}
 	}
 
-	/* Get the reply packet and return its lenght */
+	/* Wait for the reply packet */
 	pfd.fd = ch->fd;
 	pfd.events = POLLIN | POLLHUP;
 	pfd.revents = 0;
@@ -134,10 +138,15 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		errno = ETIMEDOUT;
 		return -1;
 	}
-	/* this "size" is wrong for strings, so recv the max packet size */
-	size = MINIPC_GET_ASIZE(pd->retval) + sizeof(uint32_t);
-	retsize = recv(ch->fd, p_in, sizeof(*p_in), 0);
 
+	if (shm) {
+		read(ch->fd, &i, 1);
+		size = retsize = sizeof(shm->reply);
+	} else {
+		/* this "size" is wrong for strings, so recv the max size */
+		size = MINIPC_GET_ASIZE(pd->retval) + sizeof(uint32_t);
+		retsize = recv(ch->fd, p_in, sizeof(*p_in), 0);
+	}
 	/* if very short, we have a problem */
 	if (retsize < (sizeof(p_in->type)) + sizeof(int))
 		goto too_short;
@@ -184,5 +193,4 @@ doesnt_fit:
 	}
 	errno = EPROTO;
 	return -1;
-	
 }

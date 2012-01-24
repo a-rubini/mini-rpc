@@ -106,24 +106,26 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 {
 	struct mpc_req_packet *p_in, _pkt_in;
 	struct mpc_rep_packet *p_out, _pkt_out;
+	struct mpc_shmem *shm = link->memaddr;
 	const struct minipc_pd *pd;
 	struct mpc_flist *flist;
 	int i;
 
-	if (link->memaddr) {
-		struct mpc_shmem *shm = link->memaddr;
+	if (shm) {
 		p_in = &shm->request;
 		p_out = &shm->reply;
+		/* read one byte, it's just a signal */
+		read(fd, &i, 1);
 	} else {
 		p_in = & _pkt_in;
 		p_out = & _pkt_out;
+		/* receive the packet and manage errors */
+		i = recv(fd, p_in, sizeof(*p_in), 0);
+		if (i < 0 && errno == EINTR)
+			return;
+		if (i <= 0)
+			goto close_client;
 	}
-
-	i = recv(fd, p_in, sizeof(*p_in), 0);
-	if (i < 0 && errno == EINTR)
-		 return;
-	if (i <= 0)
-		goto close_client;
 
 	/* use p_in->name to look for the function */
 	for (flist = link->flist; flist; flist = flist->next)
@@ -161,6 +163,10 @@ static void mpc_handle_client(struct mpc_link *link, int pos, int fd)
 	}
 
  send_reply:
+	if (shm) {
+		shm->nreply++; /* message already in place */
+		return;
+	}
 	/* send a 32-bit value plus the declared return length */
 	if (send(fd, p_out, sizeof(p_out->type)
 	     + MINIPC_GET_ASIZE(p_out->type), MSG_NOSIGNAL) < 0)
@@ -233,6 +239,13 @@ int minipc_server_action(struct minipc_ch *ch, int timeoutms)
 		errno = EAGAIN;
 		return -1;
 	}
+
+	/* A shmem server has only one descriptor, for one client */
+	if (link->memaddr) {
+		mpc_handle_client(link, -1, ch->fd);
+		return 0;
+	}
+
 	/* First, look for all clients */
 	for (i = 0; i < MINIPC_MAX_CLIENTS; i++) {
 		if (link->fd[i] < 0)

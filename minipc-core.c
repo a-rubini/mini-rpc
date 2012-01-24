@@ -234,12 +234,6 @@ struct minipc_ch *__minipc_link_create(const char *name, int flags)
 	mkdir(MINIPC_BASE_PATH, 0777); /* may exist, ignore errors */
 
 	if (flags & MPC_FLAG_SERVER) {
-		for (i = 0; i < MINIPC_MAX_CLIENTS; i++)
-			link->fd[i] = -1;
-		FD_ZERO(&link->fdset);
-		FD_SET(fd, &link->fdset);
-
-		i = 1;
 		unlink(sun.sun_path);
 		if (bind (fd, (struct sockaddr *)&sun, sizeof(sun)) < 0)
 			goto out_close;
@@ -250,8 +244,14 @@ struct minipc_ch *__minipc_link_create(const char *name, int flags)
 			goto out_close;
 	}
 
-	/* success: link to the list and return */
+	/* success: fix your fd values, link to the list and return */
  out_success:
+	if (flags & MPC_FLAG_SERVER) {
+		for (i = 0; i < MINIPC_MAX_CLIENTS; i++)
+			link->fd[i] = -1;
+		FD_ZERO(&link->fdset);
+		FD_SET(link->ch.fd, &link->fdset);
+	}
 	link->addr = sun;
 	next = __mpc_base;
 	link->nextl = __mpc_base;
