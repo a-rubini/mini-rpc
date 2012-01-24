@@ -74,6 +74,7 @@ considered co-author and my inspiring muse.
 * The Server::                  
 * Diagnostics::                 
 * The Communication Protocol::  
+* Transport Mechanisms::        
 * Examples::                    
 * Bugs::                        
 @end menu
@@ -422,6 +423,64 @@ value.  Note that @code{type} is not passed back to the caller of
 @i{minipc_call}, because errors are identified by a negative return value.
 
 @c ##########################################################################
+@node Transport Mechanisms
+@chapter Transport Mechanisms
+
+The @i{name} argument used in either @i{minipc_server_create} or
+@i{minipc_client_create} is used to select both the back-end transport
+and instance.  At this point in time, the library supports the
+following back-ends for communication:
+
+@table @i
+
+@item Unix sockets
+
+	The default transport for communication is Unix-domain sockets
+	(@code{PF_UNIX} a.k.a. @code{PF_FILE} or @code{PF_LOCAL}).  The
+	@i{name} argument is used as socket name within the default
+        directory for @i{mini-ipc} sockets. A server can
+	handle many clients at a time in a single thread, based on @i{select}.
+
+@item System-V Shared memory
+
+	If the @i{name} argument is of the form @code{shm:<id>}, then
+        the transport being used is a shared memory area. The @i{id}
+        is either a decimal oh hex number. In this case a server can only
+        accept one client, because there is no check for concurrency. Please
+        note that the library doesn't enforce this, so more clients may
+        be used if you make your own locking.  @i{mini-ipc} places its
+        data structures at the beginning of the shared memory area.
+
+@item I/O memory
+
+	If the @i{name} argument is of the form @code{mem:<address>},
+        The library will open @i{/dev/mem} and use the specific address
+        as communication transport.  The address must be a multiple
+        of page size. This is meant to communicate with
+        a coprocessor living on and FPGA (this is one of the use cases
+        in the @i{White Rabbit Switch}).  Again, both server and client
+        operation is supported, but a server should accept only one client
+        at a time.
+
+@end table
+
+Since the library is based on file descriptors, the two memory-based
+transports fork a process that polls the memory area to signal
+events on the @code{minipc_ch} file descriptor.  The default polling
+interval is 10ms, but it can be changed by calling @i{minipc_set_poll}
+before creating the channel:
+
+@example
+   int minipc_set_poll(int usec);
+@end example
+
+The function returns the previous polling interval, in microseconds,
+or -1 with @code{errno} set to @code{-EINVAL} if the argument is
+negative or zero. Please note that the polling interval must be set
+before creating the channel, because the parameter will be used by the
+child process.
+
+@c ##########################################################################
 @node Examples
 @chapter Examples
 
@@ -432,6 +491,7 @@ are logically divided in groups.
 * Trivial Example::             
 * Pty-based Example::           
 * A Bridge to Shared Memory::   
+* Native Shared Memory::        
 @end menu
 
 @c ==========================================================================
@@ -503,8 +563,8 @@ read or write environment variables in the @code{pty-server}
 application; it can feed strings to the shell driven by the pty
 server; it can run strlen and strcat remotely, as well as remotely run
 the stat system call (to check string and structure exchange).  Each
-@code{pty-client} run takes a commandline, like the following ones
-(names in angle-brackets are placeholders):
+@code{pty-client} run takes a command line, like the following ones
+(names in angle-brackets are place holders):
 
 @example
    ./pty-client count
@@ -540,7 +600,12 @@ The example example shows how to route @i{mini-ipc} requests to
 another process through shared memory.  Sure there is no real interest
 in shared memory for IPC calls, but the same approach can be used with
 mailbox-kind communication mechanisms to talk with hardware; for
-example a CPU without OS running on an FPGA.
+example a CPU without OS running on an FPGA. That's why the examples
+in this set are called @code{mbox-@i{something}}.
+
+Please note that @i{mini-ipc} now has shared memory support: this set
+of example doesn't use the library internals but implements a simpler
+protocol.
 
 This example-set is made up of three programs:
 
@@ -616,6 +681,74 @@ and output lines reported by one invocation of @code{mbox-client}:
    mode 40755, size 32768, owner 410, atime 1326230999
 @end example
 
+@c ==========================================================================
+@node Native Shared Memory
+@section Native Shared Memory
+
+This set of examples uses the native shared memory support in the
+library.  This means that server code exports functions using the
+library data structures, and the client calls them in the same way.
+
+There are two examples in this set, that share the source file that
+instantiates function definitions. The code, as you may expect, is
+mainly copied from the @i{pty} set of examples described earlier. I
+see no point in factorizing stuff here, as the example must be
+understandable by themselves.
+
+@table @code
+
+@item shmem-server
+
+	The program creates a server using a name @code{shm:@i{XXXX}} where
+        the @i{XXXX} is received from the command line.
+        For example ``@code{./shmem-server 45}''. It uses verbose reporting
+        on @i{stderr} and just waits for requests.
+
+@item shmem-client
+
+	The program receives several command line arguments: the first
+        is the shared memory identifier, that should match the one used
+        in the server. Further arguments are commands. The client
+        supports the following commands, that access all functions
+        exported by the server. Each of them receives 1 or 2 arguments:
+        @i{getenv}, @i{setenv}, @i{add}, @i{strlen}, @i{strcat}, @i{stat}.
+
+@end table
+
+This is a sample client session, with diagnostic stripped:
+
+@example
+   $ ./shmem-client 45 getenv USER
+   getenv(USER) = rubini
+   $ ./shmem-client 45 setenv USER pippo
+   setenv USER = pippo : success
+   $ ./shmem-client 45 getenv USER
+   getenv(USER) = pippo
+   $ ./shmem-client 45 strlen "this is a test"
+   strlen(this is a test) = 14
+   $ ./shmem-client 45 add 666 999
+   add 666 + 999 = 1665 : success
+@end example
+
+At the same time, the server reported the following:
+
+@example
+   mpc_handle_client: request for getenv
+   mpc_handle_client: request for setenv
+   mpc_handle_client: request for getenv
+   mpc_handle_client: request for strlen
+   mpc_handle_client: request for add
+@end example
+
+Remote errors are handled as usual: @code{EREMOTEIO} locally and the
+proper @code{errno} value in the packet:
+
+@example
+   $ ./shmem-client 45 stat /tmp/nosuchfile
+   minipc_call: remote error "No such file or directory"
+   .//shmem-client: remote "stat": Remote I/O error
+@end example
+
 @c ##########################################################################
 @node Bugs
 @chapter Bugs
@@ -625,6 +758,19 @@ There are no known bugs, but the following points at least may be
 problematic as I didn't thoroughly test the code for them:
 
 @itemize @bullet
+
+@item There are some hard limits, like less than 64 file descriptors
+      open. The thing is meant to remain small and avoid some complexity.
+
+@item Again, for simplicity, not everything is undone properly; but for
+      small systems with a well defined process-set this is not a problem.
+      For example, shared memory regions are not destroyed, and some
+      unlike errors don't undo everything that succeed before the error.
+
+@item The shared memory thing has no locking at all, and the sequencing
+      engine is pretty simple-minded. The only expected user is a
+      real-time process running on a coprocessor with a single client
+      feeding it one request at a time.
 
 @item Please don't try going near 1k argument/retval size
 (@code{MINIPC_MAX_REPLY}: off-by-1 errors are most likely present (and
@@ -645,4 +791,5 @@ I have no tests yet to feel safe).
 @c  LocalWords:  millisec errno recv ETIMEDOUT EREMOTEIO unexport timeoutms
 @c  LocalWords:  fdset setptr endian itemx logf stderr logfile fprintf fflush
 @c  LocalWords:  varargs unmarshalled unmarshalling unmarshall gettimeofday
-@c  LocalWords:  timeval FPGA stat timeofday
+@c  LocalWords:  timeval FPGA stat timeofday strncat usec EINVAL mkstemp atime
+@c  LocalWords:  getenv setenv XXXXXX stdin stdout
