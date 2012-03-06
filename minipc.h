@@ -12,15 +12,21 @@
  */
 #ifndef __MINIPC_H__
 #define __MINIPC_H__
+
 #include <stdint.h>
+#if __STDC_HOSTED__ /* freestanding servers have less material */
 #include <stdio.h>
 #include <sys/select.h>
+#endif
 
 /* Hard limits */
 #define MINIPC_MAX_NAME		20 /* includes trailing 0 */
 #define MINIPC_MAX_CLIENTS	64
 #define MINIPC_MAX_ARGUMENTS	256 /* Also, max size of packet words -- 1k */
 #define MINIPC_MAX_REPLY	1024 /* bytes */
+#if !__STDC_HOSTED__
+#define MINIPC_MAX_EXPORT	12 /* freestanding: static allocation */
+#endif
 
 /* The base pathname, mkdir is performed as needed */
 #define MINIPC_BASE_PATH "/tmp/.minipc"
@@ -74,9 +80,6 @@ int minipc_close(struct minipc_ch *ch);
 /* Generic: set the default polling interval for mem-based channels */
 int minipc_set_poll(int usec);
 
-/* Generic: attach diagnostics to a log file */
-int minipc_set_logfile(struct minipc_ch *ch, FILE *logf);
-
 /* Server: register exported functions */
 int minipc_export(struct minipc_ch *ch, const struct minipc_pd *pd);
 int minipc_unexport(struct minipc_ch *ch, const struct minipc_pd *pd);
@@ -87,11 +90,16 @@ uint32_t *minipc_get_next_arg(uint32_t arg[], uint32_t atype);
 /* Handle a request if pending, otherwise -1 and EAGAIN */
 int minipc_server_action(struct minipc_ch *ch, int timeoutms);
 
+#if __STDC_HOSTED__
+/* Generic: attach diagnostics to a log file */
+int minipc_set_logfile(struct minipc_ch *ch, FILE *logf);
+
 /* Return an fdset for the user to select() on the service */
 int minipc_server_get_fdset(struct minipc_ch *ch, fd_set *setptr);
 
 /* Client: make requests */
 int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		const struct minipc_pd *pd, void *ret, ...);
+#endif /* __STDC_HOSTED__ */
 
 #endif /* __MINIPC_H__ */

@@ -12,8 +12,13 @@
  */
 #ifndef __MINIPC_INT_H__
 #define __MINIPC_INT_H__
+
+#include <sys/types.h>
+#if __STDC_HOSTED__ /* freestanding servers have less material */
 #include <sys/un.h>
 #include <sys/select.h>
+#endif
+
 #include "minipc.h"
 
 /*  be safe, in case some other header had them slightly differntly */
@@ -51,13 +56,15 @@ struct mpc_link {
 	int flags;
 	struct mpc_link *nextl;
 	struct mpc_flist *flist;
-	FILE *logf;
-	struct sockaddr_un addr;
 	void *memaddr;
 	int memsize;
-	char name[MINIPC_MAX_NAME];
+#if __STDC_HOSTED__ /* these fields are not used in freestanding uC */
+	FILE *logf;
+	struct sockaddr_un addr;
 	int fd[MINIPC_MAX_CLIENTS];
 	fd_set fdset;
+#endif
+	char name[MINIPC_MAX_NAME];
 };
 #define MPC_MAGIC		0xc0ffee99
 
