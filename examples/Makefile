@@ -14,12 +14,31 @@ OBJDUMP         = $(CROSS_COMPILE)objdump
 CFLAGS = -Wall -ggdb -I.. -O2
 LDFLAGS = -L.. -lminipc -lm
 
-PROGS = trivial-server trivial-client
-PROGS += pty-server pty-client
-PROGS += mbox-process mbox-bridge mbox-client
-PROGS += shmem-server shmem-client
+# we may be hosted or freestanding. For freestanding there is one
+# example only. The following variables are exported by the upper
+# Makefile, but if you "make" in this directory, it checks by itself
+IPC_FREESTANDING ?= $(shell ../check-freestanding $(CC))
+IPC_HOSTED ?=       $(shell ../check-freestanding -n $(CC))
 
-all: $(PROGS)
+# Hosted is the opposite of freestanding, and cflags change too
+ifeq ($(IPC_FREESTANDING),y)
+  IPC_HOSTED = n
+  CFLAGS += -ffreestanding -I../arch-$(ARCH)
+else
+  IPC_HOSTED = y
+endif
+
+
+PROGS-$(IPC_HOSTED) = trivial-server trivial-client
+PROGS-$(IPC_HOSTED) += pty-server pty-client
+PROGS-$(IPC_HOSTED) += mbox-process mbox-bridge mbox-client
+PROGS-$(IPC_HOSTED) += shmem-server shmem-client
+
+IPC_FREESTANDING ?= n
+
+PROGS-$(IPC_FREESTANDING) += freestanding-server
+
+all: $(PROGS-y)
 
 # the default puts LDFLAGS too early. Bah...
 %: %.c
@@ -39,7 +58,7 @@ shmem-client: shmem-client.o shmem-structs.o
 
 
 # This is stupid, it won't apply the first time, but, well... it works
-$(PROGS) $(wildcard *.o): $(wildcard ../*.h ../*.a)
+$(PROGS-y) $(wildcard *.o): $(wildcard ../*.h ../*.a)
 
 clean:
 	rm -f *.o *~ $(PROGS)
