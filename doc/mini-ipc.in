@@ -67,6 +67,11 @@ platform).  Nonetheless, I borrowed quite some ideas from the
 implementation by Tomasz Wlostowski, who must definitely be
 considered co-author and my inspiring muse.
 
+This version also supports a @i{freestanding} mode, whereas a
+memory-mapped embedded CPU can act as a server for a process
+on the main CPU that acts as a client.  The library offers the same
+API as the normal hosted version, but only for server operation.
+
 @menu
 * Basic Ideas::                 
 * The Main Data Structure::     
@@ -75,6 +80,7 @@ considered co-author and my inspiring muse.
 * Diagnostics::                 
 * The Communication Protocol::  
 * Transport Mechanisms::        
+* Freestanding Operation::      
 * Examples::                    
 * Bugs::                        
 @end menu
@@ -481,6 +487,82 @@ before creating the channel, because the parameter will be used by the
 child process.
 
 @c ##########################################################################
+@node Freestanding Operation
+@chapter Freestanding Operation
+
+This version of the library can be compiled for a @i{freestanding}
+system that acts as a server for a hosted system.  Our use case is an
+LM32 soft-core that runs some real-time activities on request of the
+main ARM processor.
+
+The @i{Makefiles} of the package identify a @i{freestanding}
+compilation environment by the @code{CROSS_COMPILE} prefix: if the
+compiler has a dynamic C library, it is assumed to be hosted,
+otherwise it's assumed to be freestanding.  The user can force
+freestanding compilation by passing @code{IPC_FREESTANDING}
+in the environment or on the command line of @i{make}.
+
+When compiling in a freestanding environment, only
+@code{minipc-mem-server.c} is compiled. The source file includes
+the usual @code{minipc.h} and @code{minipc-int.h}, but the code
+itself is simpler (no sockets, no @code{/dev/mem} nor @i{shmget}).
+The program has been tested (and is being used) on LM32, within an FPGA.
+
+In a freestanding server, the following functions are implemented,
+with some limitations:
+
+@table @code
+
+@item minipc_server_create
+
+	The function receives the usual arguments (name and flags),
+        but the name is mandated to be @code{mem:@i{XXXX}} where the
+        trailing part is an hex address. The data structure for
+        communication is stored at that address in CPU memory.
+
+@item minipc_close
+
+	Works as expected, releasing resources. Note, however,
+        that only one server may be active at any time (so, you'll
+        most likely run a server at boot and won't ever close it).
+
+@item minipc_export
+
+	The function exports one procedure that can be called
+        by the server. To void using @i{malloc}, the library uses
+        a static array of structures to host export information.
+        The length of the array is @code{MINIPC_MAX_EXPORT}
+        (12 by default).
+
+@item minipc_unexport
+
+	The function frees one slot in the static array.
+
+@item minipc_get_next_arg
+
+	The function works exactly like it does in hosted
+        environments
+
+@item minipc_server_action
+
+	The function receives the same arguments as the equivalent
+        one in hosted environments, but doesn't honor the @i{timeout}
+        value. Timing is very device-specific, so the library can't
+        provide any. If a new request is pending, the function serves
+        it, otherwise it returns immediately.
+
+@end table
+
+In our use case, the compiler has @code{<strings.h>} and a few more
+headers needed to compile the library, but lacks @code{<stdint.h>}.
+
+As an ugly workaround, the file @code{arch-lm32/stdint.h}: the
+@i{Makefile} adds @code{-Iarch-$(ARCH)} to the compiler's command
+line, so we can build the library using @code{ARCH=lm32}.  You may use
+a similar trick to add missing headers for your freestanding
+architecture.
+
+@c ##########################################################################
 @node Examples
 @chapter Examples
 
@@ -492,6 +574,7 @@ are logically divided in groups.
 * Pty-based Example::           
 * A Bridge to Shared Memory::   
 * Native Shared Memory::        
+* Freestanding Server::         
 @end menu
 
 @c ==========================================================================
@@ -700,33 +783,40 @@ understandable by themselves.
 @item shmem-server
 
 	The program creates a server using a name @code{shm:@i{XXXX}} where
-        the @i{XXXX} is received from the command line.
-        For example ``@code{./shmem-server 45}''. It uses verbose reporting
-        on @i{stderr} and just waits for requests.
+        the whole identifier must be passed on the command line.
+        For example ``@code{./shmem-server shm:45}''. It uses verbose reporting
+        on @i{stderr} and just waits for requests. Passing @code{shm:}
+        on the command line is mandatory for consistency with the
+        corresponding client.
 
 @item shmem-client
 
 	The program receives several command line arguments: the first
-        is the shared memory identifier, that should match the one used
-        in the server. Further arguments are commands. The client
+        is the RPC channel identifier (e.g. @code{shm:45}); it should match
+        the identifier used by the corresponding server.  If your server
+        lives in system memory (e.g., it is a freestanding server in
+        a soft-core), you can use this client, passing @code{mem:10003000}
+        or equivalent.
+        Further arguments are commands. The client
         supports the following commands, that access all functions
         exported by the server. Each of them receives 1 or 2 arguments:
         @i{getenv}, @i{setenv}, @i{add}, @i{strlen}, @i{strcat}, @i{stat}.
+
 
 @end table
 
 This is a sample client session, with diagnostic stripped:
 
 @example
-   $ ./shmem-client 45 getenv USER
+   $ ./shmem-client shm:45 getenv USER
    getenv(USER) = rubini
-   $ ./shmem-client 45 setenv USER pippo
+   $ ./shmem-client shm:45 setenv USER pippo
    setenv USER = pippo : success
-   $ ./shmem-client 45 getenv USER
+   $ ./shmem-client shm:45 getenv USER
    getenv(USER) = pippo
-   $ ./shmem-client 45 strlen "this is a test"
+   $ ./shmem-client shm:45 strlen "this is a test"
    strlen(this is a test) = 14
-   $ ./shmem-client 45 add 666 999
+   $ ./shmem-client shm:45 add 666 999
    add 666 + 999 = 1665 : success
 @end example
 
@@ -744,10 +834,42 @@ Remote errors are handled as usual: @code{EREMOTEIO} locally and the
 proper @code{errno} value in the packet:
 
 @example
-   $ ./shmem-client 45 stat /tmp/nosuchfile
+   $ ./shmem-client shm:45 stat /tmp/nosuchfile
    minipc_call: remote error "No such file or directory"
    .//shmem-client: remote "stat": Remote I/O error
 @end example
+
+@c ==========================================================================
+@node Freestanding Server
+@section Freestanding Server
+
+When compiling for a freestanding CPU environment, the @i{Makefile}
+only builds the example @code{freestanding-server} . This exports
+two functions, @code{add} and @code{mul}.
+
+You may use the @code{add} functionality from a @code{shmem-client}
+example file, by passing the proper address in @code{/dev/mem}.
+
+In order to run this example, however, you'll need to complete it
+with all the missing stuff (drivers, linker scripts, an so on),
+as well as fixing the address used for the communication data
+structure.
+
+Finally, please note that the library doesn't currently manage endian
+conversion, and I'd love not to do that until I add IP channels (TCP
+and UDP).  However, your freestanding server may have a different
+endianness from the host, so you may need the conversion.
+
+But there are worse situations: your soft core may be big endian and
+the host may be little endian, but using a straight 32-bit memory link
+you won't notice endian issues when exchanging integers. That's great,
+until you exchange strings: first of all, the bus just discards
+byte-wide and halfword-wide accesses (the library does @i{memcpy} for
+procedure names now, so this is mostly fixed); then, every word in the
+string is byte-swapped.  So you want @code{"add"} and you get
+@code{"\0dda"} instead.  You can work around the issue by using names
+like @code{ssss}, @code{1111} and the like; ugly but simple -- fixing
+this @i{cleanly} in the library is hard, I've no idea how to do it.
 
 @c ##########################################################################
 @node Bugs
