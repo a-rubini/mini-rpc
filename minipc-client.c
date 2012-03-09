@@ -53,7 +53,7 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		fprintf(link->logf, "%s: calling \"%s\"\n",
 			__func__, pd->name);
 	}
-	strcpy(p_out->name, pd->name);
+	memcpy(p_out->name, pd->name, MINIPC_MAX_NAME);
 
 	va_start(ap, ret);
 	for (i = narg = 0; ; i++) {
