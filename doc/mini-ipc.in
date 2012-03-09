@@ -451,7 +451,8 @@ following back-ends for communication:
 
 	If the @i{name} argument is of the form @code{shm:<id>}, then
         the transport being used is a shared memory area. The @i{id}
-        is either a decimal oh hex number. In this case a server can only
+        is either a decimal oh hex number (with leading @code{0x}).
+        In this case a server can only
         accept one client, because there is no check for concurrency. Please
         note that the library doesn't enforce this, so more clients may
         be used if you make your own locking.  @i{mini-ipc} places its
@@ -460,9 +461,9 @@ following back-ends for communication:
 @item I/O memory
 
 	If the @i{name} argument is of the form @code{mem:<address>},
-        The library will open @i{/dev/mem} and use the specific address
+        the library will open @i{/dev/mem} and use the specific address
         as communication transport.  The address must be a multiple
-        of page size. This is meant to communicate with
+        of page size and written in hex form. This is meant to communicate with
         a coprocessor living on and FPGA (this is one of the use cases
         in the @i{White Rabbit Switch}).  Again, both server and client
         operation is supported, but a server should accept only one client

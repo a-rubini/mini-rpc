@@ -163,8 +163,8 @@ static struct mpc_link *__minipc_memlink_create(struct mpc_link *link)
 		link->flags |= MPC_FLAG_SHMEM;
 	}
 
-	/* Warning: no check for trailing garbage in name */
-	if (sscanf(link->name, "mem:%li", &offset)) {
+	/* Warning: no check for trailing garbage in name -- hex mandatory */
+	if (sscanf(link->name, "mem:%lx", &offset)) {
 		int fd = open("/dev/mem", O_RDWR | O_SYNC);
 
 		if (fd < 0)
