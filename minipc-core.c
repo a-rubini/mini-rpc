@@ -130,6 +130,9 @@ void __minipc_child(void *addr, int fd, int flags)
 
 	prev = *vptr;
 
+	/* Ok, unlock the parent: we are ready */
+	write(fd, "-", 1);
+
 	while (1) {
 		if (*vptr != prev) {
 			write(fd, "", 1);
@@ -149,6 +152,7 @@ static struct mpc_link *__minipc_memlink_create(struct mpc_link *link)
 	int memsize, pid, ret;
 	int pagesize = getpagesize();
 	int pfd[2];
+	char msg;
 
 	memsize = (sizeof(struct mpc_shmem) + pagesize - 1) & ~pagesize;
 
@@ -193,6 +197,8 @@ static struct mpc_link *__minipc_memlink_create(struct mpc_link *link)
 		close(pfd[1]);
 		link->ch.fd = pfd[0];
 		link->pid = pid;
+		/* Before operating, wait for the child to ping us */
+		read (pfd[0], &msg, 1); /* must be '-' ... check? */
 		return link;
 	case -1:
 		break; /* error... */
