@@ -51,3 +51,6 @@ $(wildcard *.o): $(wildcard *.h)
 clean:
 	rm -f *.o *~ $(LIB)
 	$(MAKE) -C examples clean
+
+install:
+	@echo "We have no install rule by now"
