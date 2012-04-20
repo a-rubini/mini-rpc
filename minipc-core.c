@@ -44,8 +44,9 @@ void mpc_free_flist(struct mpc_link *link, struct mpc_flist *flist)
 		return;
 	}
 	*nextp = flist->next;
-	fprintf(link->logf, "%s: unexported function %p (%s)\n",
-		__func__, flist->pd->f, flist->pd->name);
+	if (link->logf)
+		fprintf(link->logf, "%s: unexported function %p (%s)\n",
+			__func__, flist->pd->f, flist->pd->name);
 	free(flist);
 }
 
