@@ -5,23 +5,23 @@
 # Thus, the user can set IPC_FREESTANDING=y . If unset, this gets called.
 
 # Accept "-n" to invert the result (select second field, not first)
-if [ "x$1" == "x-n" ]; then select=2; shift; else select=1; fi
+if [ "x$1" = "x-n" ]; then select=2; shift; else select=1; fi
 
 CC=$1
-if [ "x$CC" == "x" ]; then
+if [ "x$CC" = "x" ]; then
     echo "$0: pass the compiler path (\$CC) as argument" >& 2
     exit 1
 fi
 
 # Check the compiler: if it has no matches is prints the unadorned string
-if [ "$($CC -print-file-name=libc.so)" == "libc.so" ]; then
+if [ "$($CC -print-file-name=libc.so)" = "libc.so" ]; then
     res=y,n
 else
     res=n,y
 fi
 
 # If passed from the user, override the autodetected value
-if [ "$IPC_FREESTANDING" == "y" ]; then
+if [ "$IPC_FREESTANDING" = "y" ]; then
     res=y,n
 fi
 
