@@ -20,6 +20,7 @@
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
 
@@ -114,8 +115,8 @@ int minipc_set_logfile(struct minipc_ch *ch, FILE *logf)
 void __minipc_child(void *addr, int fd, int flags)
 {
 	int i;
-	uint32_t prev, *vptr;
-	struct mpc_shmem *shm = addr;
+	volatile uint32_t prev, *vptr;
+	volatile struct mpc_shmem *shm = addr;
 
 	for (i = 0; i < 256; i++)
 		if (i != fd) close(i);
@@ -142,6 +143,13 @@ void __minipc_child(void *addr, int fd, int flags)
 		if (getppid() != i)
 			exit(0);
 		usleep(__mpc_poll_usec);
+		/* cacheflush is hidden.. hack a context switch */
+		switch (fork()) {
+		case 0: exit(0);
+		case -1: break;
+		default: wait(NULL);
+		}
+		//git checcacheflush(shm, sizeof(*shm), DCACHE);
 	}
 }
 
