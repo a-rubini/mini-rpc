@@ -200,6 +200,8 @@ static struct mpc_link *__minipc_memlink_create(struct mpc_link *link)
 		link->pid = pid;
 		/* Before operating, wait for the child to ping us */
 		read (pfd[0], &msg, 1); /* must be '-' ... check? */
+		/* Now turn it into non-blocking (we poll(2)) */
+		fcntl(pfd[0], F_SETFL, fcntl(pfd[0], F_GETFL) | O_NONBLOCK);
 		return link;
 	case -1:
 		break; /* error... */

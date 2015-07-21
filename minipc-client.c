@@ -116,6 +116,9 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 	va_end(ap);
 
 	if (shm) {
+		char b[10];
+		/* flush the file, in case previous read went timeout */
+		read(ch->fd, b, sizeof(b)); /* EAGAIN if all goes well */
 		shm->nrequest++;
 	} else {
 		size = sizeof(p_out->name) + sizeof(p_out->args[0]) * narg;
