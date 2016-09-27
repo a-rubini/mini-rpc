@@ -31,6 +31,7 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 {
 	struct mpc_link *link = mpc_get_link(ch);
 	struct mpc_shmem *shm = link->memaddr;
+	int flags = link->flags;
 	struct pollfd pfd;
 	int i, narg, size, retsize, pollnr;
 	int atype, asize;
@@ -121,8 +122,15 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		read(ch->fd, b, sizeof(b)); /* EAGAIN if all goes well */
 		shm->nrequest++;
 	} else {
+		int send_flags = 0;
+
+		/* if MINIPC_FLAG_MSG_NOSIGNAL is set, pass MSG_NOSIGNAL to
+		 * a send function */
+		if (flags & MINIPC_FLAG_MSG_NOSIGNAL)
+			send_flags |= MSG_NOSIGNAL;
+
 		size = sizeof(p_out->name) + sizeof(p_out->args[0]) * narg;
-		if (send(ch->fd, p_out, size, 0) < 0) {
+		if (send(ch->fd, p_out, size, send_flags) < 0) {
 			/* errno already set */
 			return -1;
 		}

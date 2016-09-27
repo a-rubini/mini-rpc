@@ -147,8 +147,21 @@ no arguments, each argument is described by 4 more bytes.
 Client and server are expected to share such data structure, or at least
 the macros used to build the data structure. The fields
 @i{name}, @i{retval} and @i{args}, must match. The function pointer
-is only used in the server. No
-user-accessible flags are currently there.
+is only used in the server. Right now there is only one user-accessible flag
+supported:
+
+@table @code
+@item MINIPC_FLAG_MSG_NOSIGNAL
+
+	This flag let the @t{send} function in @t{minipc_call} function to
+        not generate SIGPIPE, when a connection is broken (e.g. server died).
+        The caller of the @t{minipc_call} will be notified with a corresponding
+        return value about an error, instead of a signal. This flag is
+        meaningful only for a client which uses @i{minipc} version with
+        sockets.
+
+@end table
+
 
 The "args" array must be terminated by a "MINIPC_ARG_END" value, which
 is guaranteed to be bitwise zero. The other arguments encode type and

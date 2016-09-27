@@ -64,6 +64,12 @@ struct minipc_pd {
 	uint32_t args[];		/* zero-terminated */
 };
 
+/* Let send function not generate SIGPIPE signal when connection is broken.
+ * minipc_call anyway will return a proper value in such situation.
+ * This flag is meaningful only for a client which uses minipc version with
+ * sockets. */
+#define MINIPC_FLAG_MSG_NOSIGNAL	1
+
 /* This is the channel definition */
 struct minipc_ch {
 	int fd;
