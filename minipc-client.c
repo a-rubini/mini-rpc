@@ -122,7 +122,7 @@ int minipc_call(struct minipc_ch *ch, int millisec_timeout,
 		shm->nrequest++;
 	} else {
 		size = sizeof(p_out->name) + sizeof(p_out->args[0]) * narg;
-		if (send(ch->fd, p_out, size, 0) < 0) {
+		if (send(ch->fd, p_out, size, MSG_NOSIGNAL) < 0) {
 			/* errno already set */
 			return -1;
 		}
