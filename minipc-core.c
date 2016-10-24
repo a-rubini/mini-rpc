@@ -148,7 +148,7 @@ void __minipc_child(void *addr, int fd, int flags)
 /* helper function for memory-based channels */
 static struct mpc_link *__minipc_memlink_create(struct mpc_link *link)
 {
-	void *addr;
+	void *addr = NULL;
 	long offset;
 	int memsize, pid, ret;
 	int pagesize = getpagesize();
@@ -220,7 +220,7 @@ static struct mpc_link *__minipc_memlink_create(struct mpc_link *link)
 /* create a link, either server or client */
 struct minipc_ch *__minipc_link_create(const char *name, int flags)
 {
-	struct mpc_link *link, *next;
+	struct mpc_link *link;
 	struct sockaddr_un sun;
 	int fd, i;
 
@@ -267,7 +267,6 @@ struct minipc_ch *__minipc_link_create(const char *name, int flags)
 		FD_SET(link->ch.fd, &link->fdset);
 	}
 	link->addr = sun;
-	next = __mpc_base;
 	link->nextl = __mpc_base;
 	__mpc_base = link;
 	return &link->ch;
