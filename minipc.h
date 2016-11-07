@@ -63,8 +63,6 @@ struct minipc_pd {
 	uint32_t retval;		/* type of return value */
 	uint32_t args[];		/* zero-terminated */
 };
-/* Flags: verbosity is about argument and retval marshall/unmarshall */
-#define MINIPC_FLAG_VERBOSE		1
 
 /* This is the channel definition */
 struct minipc_ch {
