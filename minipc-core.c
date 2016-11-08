@@ -67,7 +67,7 @@ int minipc_close(struct minipc_ch *ch)
 		return -1;
 	}
 
-	(*nextp)->nextl = link->nextl;
+	(*nextp) = link->nextl;
 
 	if (link->logf) {
 		fprintf(link->logf, "%s: found link %p (fd %i)\n",
