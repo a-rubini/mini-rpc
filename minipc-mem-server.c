@@ -7,6 +7,12 @@
  * This replicates some code of minipc-core and minipc-server.
  * It implements the functions needed to make a freestanding server
  * (for example, an lm32 running on an FPGA -- the case I actually need).
+ *
+ *   This library is free software; you can redistribute it and/or
+ *   modify it under the terms of the GNU Lesser General Public
+ *   License as published by the Free Software Foundation; either
+ *   version 2.1 of the License, or (at your option) any later version.
+ *
  */
 
 #include "minipc-int.h"
